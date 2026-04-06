@@ -1,0 +1,53 @@
+@import "tailwindcss";
+
+:root {
+  /* 🌿 VERDE ELEGANTE */
+  --green-primary: #2f5d50;
+  --green-soft: #3a7d6f;
+  --green-light: #e6f2ef;
+
+  /* 🧁 BEIGE SUAVE (no amarillo feo) */
+  --bg-main: #f7f6f2;
+  --bg-card: #ffffff;
+
+  /* ✍️ TEXTO */
+  --text-main: #1f2937;
+  --text-soft: #6b7280;
+}
+
+/* COMPONENTES BASE */
+
+.btn-primary {
+  @apply text-white px-5 py-3 rounded-xl font-medium transition;
+  background-color: var(--green-primary);
+}
+
+.btn-primary:hover {
+  background-color: var(--green-soft);
+}
+
+.btn-secondary {
+  @apply px-4 py-2 rounded-xl border text-sm;
+  border-color: var(--green-primary);
+  color: var(--green-primary);
+}
+
+.btn-secondary:hover {
+  background-color: var(--green-light);
+}
+
+.card {
+  @apply rounded-2xl shadow-sm border p-5;
+  background-color: var(--bg-card);
+  border-color: #e5e7eb;
+}
+
+.input {
+  @apply w-full px-4 py-3 rounded-xl border outline-none transition;
+  border-color: #e5e7eb;
+}
+
+.input:focus {
+  border-color: var(--green-primary);
+  box-shadow: 0 0 0 2px var(--green-light);
+}
