@@ -310,7 +310,7 @@ function FacturaDetailModal({ facturaId, onClose, onUpdated }) {
               </div>
               <div>
                 <p className="text-xs font-semibold text-stone-500">Tipo de cambio actual</p>
-                <p className="text-stone-700">{factura.tipo_cambio ? `Q${fmt(factura.tipo_cambio, 4)} / USD` : '—'}</p>
+                <p className="text-stone-700">{factura.tipo_cambio ? `Q${fmt(factura.tipo_cambio, 2)} / USD` : '—'}</p>
               </div>
             </div>
 
@@ -365,14 +365,14 @@ function FacturaDetailModal({ facturaId, onClose, onUpdated }) {
                         <tr key={l.id}>
                           <td className="px-3 py-2 font-medium text-stone-800">{l.descripcion_factura}</td>
                           <td className="px-3 py-2 text-stone-500">{l.productos_sombrilla?.codigo_arancelario || '—'}</td>
-                          <td className="px-3 py-2 text-stone-700">{fmt(l.total_kg, 4)}</td>
-                          <td className="px-3 py-2 text-stone-700">{fmt(l.precio_usd_kg, 6)}</td>
+                          <td className="px-3 py-2 text-stone-700">{fmt(l.total_kg, 2)}</td>
+                          <td className="px-3 py-2 text-stone-700">{fmt(l.precio_usd_kg, 2)}</td>
                           <td className="px-3 py-2 font-semibold text-stone-800">${fmt(l.total_usd)}</td>
                         </tr>
                       ))}
                       <tr className="bg-stone-50 font-semibold">
                         <td colSpan={2} className="px-3 py-2 text-stone-700">TOTAL</td>
-                        <td className="px-3 py-2 text-stone-800">{fmt(factura.total_kg, 4)} kg</td>
+                        <td className="px-3 py-2 text-stone-800">{fmt(factura.total_kg, 2)} kg</td>
                         <td />
                         <td className="px-3 py-2 text-stone-900">${fmt(factura.total_usd)}</td>
                       </tr>
@@ -404,7 +404,7 @@ function FacturaDetailModal({ facturaId, onClose, onUpdated }) {
                               {d.product_presentations?.display_name || d.product_presentations?.code || '—'}
                             </td>
                             <td className="px-3 py-1.5 text-stone-600">{fmt(d.cantidad, 2)} {d.unidad}</td>
-                            <td className="px-3 py-1.5 text-stone-600">{fmt(d.peso_kg, 4)}</td>
+                            <td className="px-3 py-1.5 text-stone-600">{fmt(d.peso_kg, 2)}</td>
                             <td className="px-3 py-1.5 text-stone-600">${fmt(d.valor_usd)}</td>
                           </tr>
                         ))
@@ -524,7 +524,7 @@ function PreviewModal({ orderId, onClose, onGenerated }) {
                 </div>
                 <div className="rounded-xl bg-stone-50 p-3 text-center">
                   <p className="text-xs text-stone-500">Total kg</p>
-                  <p className="font-semibold text-stone-800">{fmt(preview.total_kg, 4)}</p>
+                  <p className="font-semibold text-stone-800">{fmt(preview.total_kg, 2)}</p>
                 </div>
                 <div className="rounded-xl bg-[#2f5d50]/10 p-3 text-center">
                   <p className="text-xs text-[#2f5d50]">Total USD</p>
@@ -548,8 +548,8 @@ function PreviewModal({ orderId, onClose, onGenerated }) {
                       <tr key={i}>
                         <td className="px-3 py-2 font-medium text-stone-800">{l.sombrilla?.nombre || '—'}</td>
                         <td className="px-3 py-2 text-stone-500">{l.sombrilla?.codigo_arancelario || '—'}</td>
-                        <td className="px-3 py-2 text-stone-700">{fmt(l.total_kg, 4)}</td>
-                        <td className="px-3 py-2 text-stone-700">{fmt(l.precio_usd_kg, 6)}</td>
+                        <td className="px-3 py-2 text-stone-700">{fmt(l.total_kg, 2)}</td>
+                        <td className="px-3 py-2 text-stone-700">{fmt(l.precio_usd_kg, 2)}</td>
                         <td className="px-3 py-2 font-semibold text-stone-800">${fmt(l.total_usd)}</td>
                       </tr>
                     ))}
@@ -646,9 +646,9 @@ function TabFacturas() {
                   <td className="px-4 py-3 text-stone-500">{f.fecha}</td>
                   <td className="px-4 py-3 text-stone-500">{f.orders?.order_number || '—'}</td>
                   <td className="px-4 py-3 text-stone-700">{f.clients?.commercial_name || f.clients?.legal_name || '—'}</td>
-                  <td className="px-4 py-3 text-stone-600">{fmt(f.total_kg, 4)}</td>
+                  <td className="px-4 py-3 text-stone-600">{fmt(f.total_kg, 2)}</td>
                   <td className="px-4 py-3 font-semibold text-stone-800">${fmt(f.total_usd)}</td>
-                  <td className="px-4 py-3 text-stone-500">{f.tipo_cambio ? `Q${fmt(f.tipo_cambio, 4)}` : '—'}</td>
+                  <td className="px-4 py-3 text-stone-500">{f.tipo_cambio ? `Q${fmt(f.tipo_cambio, 2)}` : '—'}</td>
                   <td className="px-4 py-3"><StatusBadge status={f.status} /></td>
                   <td className="px-4 py-3 text-right">
                     <button onClick={() => setDetailId(f.id)} className="text-xs text-[#2f5d50] hover:underline">Ver</button>

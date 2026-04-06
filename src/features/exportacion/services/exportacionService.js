@@ -354,14 +354,14 @@ export function printFacturaPDF(factura) {
   const pais    = factura.clients?.pais || ''
   const numero  = factura.numero || 'BORRADOR'
   const fecha   = factura.fecha || ''
-  const tc      = factura.tipo_cambio ? `Q${fmt(factura.tipo_cambio, 4)} / USD` : '—'
+  const tc      = factura.tipo_cambio ? `Q${fmt(factura.tipo_cambio, 2)} / USD` : '—'
 
   const lineasHtml = lineas.map(l => `
     <tr>
       <td>${l.descripcion_factura || '—'}</td>
       <td>${l.productos_sombrilla?.codigo_arancelario || '—'}</td>
-      <td class="num">${fmt(l.total_kg, 4)}</td>
-      <td class="num">${fmt(l.precio_usd_kg, 6)}</td>
+      <td class="num">${fmt(l.total_kg, 2)}</td>
+      <td class="num">${fmt(l.precio_usd_kg, 2)}</td>
       <td class="num">$${fmt(l.total_usd)}</td>
     </tr>
   `).join('')
@@ -430,7 +430,7 @@ export function printFacturaPDF(factura) {
       ${lineasHtml}
       <tr class="total-row">
         <td colspan="2">TOTAL</td>
-        <td class="num">${fmt(factura.total_kg, 4)} kg</td>
+        <td class="num">${fmt(factura.total_kg, 2)} kg</td>
         <td></td>
         <td class="num">$${fmt(factura.total_usd)}</td>
       </tr>
