@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import {
   getColdRoomDashboard,
   updateColdRoomLotStatus,
-} from '../services/coldroomservice'
+} from '../services/coldRoomService'
 
 function numberOrZero(value) {
   const n = Number(value)
