@@ -465,7 +465,7 @@ function OrderDetailView({ orderId, inventory, onBack, onStatusChange, onEdit })
   const [packingItem, setPackingItem] = useState(null)
   const [showCancelConfirm, setShowCancelConfirm] = useState(false)
   const [facturaExport, setFacturaExport] = useState(null)
-  const [generatingFactura, setGeneratingFactura] = useState(false)
+  const [showFacturaPreview, setShowFacturaPreview] = useState(false)
 
   const loadOrder = useCallback(async () => {
     setLoading(true)
@@ -649,22 +649,11 @@ function OrderDetailView({ orderId, inventory, onBack, onStatusChange, onEdit })
                   </button>
                 ) : (
                   <button
-                    onClick={async () => {
-                      setGeneratingFactura(true)
-                      setError('')
-                      try {
-                        const factura = await generarFactura(orderId)
-                        setFacturaExport(factura)
-                      } catch (e) {
-                        setError(e.message)
-                      } finally {
-                        setGeneratingFactura(false)
-                      }
-                    }}
-                    disabled={generatingFactura || saving}
+                    onClick={() => setShowFacturaPreview(true)}
+                    disabled={saving}
                     className="rounded-2xl bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white shadow-md hover:bg-blue-700 transition disabled:opacity-50"
                   >
-                    {generatingFactura ? 'Generando…' : 'Generar factura exportación'}
+                    Generar factura exportación
                   </button>
                 )
               )}
@@ -876,6 +865,76 @@ function OrderDetailView({ orderId, inventory, onBack, onStatusChange, onEdit })
           </div>
         </div>
       )}
+
+      {showFacturaPreview && order && (
+        <FacturaTcModal
+          orderId={orderId}
+          onClose={() => setShowFacturaPreview(false)}
+          onGenerated={(factura) => {
+            setFacturaExport(factura)
+            setShowFacturaPreview(false)
+          }}
+        />
+      )}
+    </div>
+  )
+}
+
+// ─── Mini modal tipo de cambio para generar factura exportación ───────────────
+
+function FacturaTcModal({ orderId, onClose, onGenerated }) {
+  const [tcInput, setTcInput] = useState('')
+  const [generating, setGenerating] = useState(false)
+  const [err, setErr] = useState('')
+
+  async function handleGenerar() {
+    const tc = Number(tcInput)
+    if (!tc || tc <= 0) { setErr('Ingrese el tipo de cambio (ej. 7.75)'); return }
+    setGenerating(true)
+    setErr('')
+    try {
+      const factura = await generarFactura(orderId, { tipoCambio: tc })
+      onGenerated(factura)
+    } catch (e) {
+      setErr(e.message)
+    } finally {
+      setGenerating(false)
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
+      <div className="w-full max-w-sm rounded-3xl bg-white p-6 shadow-xl">
+        <h3 className="text-lg font-semibold text-stone-800 mb-1">Generar factura de exportación</h3>
+        <p className="text-sm text-stone-500 mb-4">Ingrese el tipo de cambio para convertir el total del pedido a USD.</p>
+        <label className="block text-xs font-semibold text-stone-500 mb-1">Tipo de cambio (GTQ / USD)</label>
+        <div className="flex items-center gap-2 mb-3">
+          <span className="text-sm text-stone-500">Q</span>
+          <input
+            type="number"
+            step="0.0001"
+            placeholder="ej. 7.7500"
+            value={tcInput}
+            onChange={e => setTcInput(e.target.value)}
+            autoFocus
+            className="flex-1 rounded-2xl border border-stone-300 bg-stone-50 px-4 py-3 text-sm outline-none focus:border-[#2f5d50] focus:ring-2 focus:ring-emerald-100"
+          />
+          <span className="text-sm text-stone-500">/ USD</span>
+        </div>
+        {err && <p className="mb-3 rounded-xl bg-red-50 px-3 py-2 text-sm text-red-700">{err}</p>}
+        <div className="flex justify-end gap-3 mt-2">
+          <button onClick={onClose} className="rounded-2xl border border-stone-300 px-4 py-2 text-sm font-semibold text-stone-700 hover:bg-stone-50">
+            Cancelar
+          </button>
+          <button
+            onClick={handleGenerar}
+            disabled={generating}
+            className="rounded-2xl bg-blue-600 px-5 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-50"
+          >
+            {generating ? 'Generando…' : 'Generar'}
+          </button>
+        </div>
+      </div>
     </div>
   )
 }

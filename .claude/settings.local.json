@@ -12,7 +12,8 @@
       "Bash(grep -o \"\\\\.from\\('[^']*'\\)\" /c/Users/daren/legucorp-pro/src/features/produccion/services/*.js)",
       "Bash(grep -o \"\\\\.from\\('[^']*'\\)\" /c/Users/daren/legucorp-pro/src/features/nomina/services/*.js)",
       "Bash(ls -la /c/Users/daren/legucorp-pro/src/features/*/pages/)",
-      "Bash(grep -r \"from\\('\" src/features/*/services/*.js)"
+      "Bash(grep -r \"from\\('\" src/features/*/services/*.js)",
+      "Bash(npx vite:*)"
     ]
   }
 }
