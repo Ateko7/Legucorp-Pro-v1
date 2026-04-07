@@ -22,7 +22,8 @@ function fmt(v, d = 1) {
   return isNaN(n) ? '—' : n.toLocaleString('es-GT', { minimumFractionDigits: 0, maximumFractionDigits: d })
 }
 
-const todayDow = new Date().getDay()
+const todayDow   = new Date().getDay()
+const tomorrowDow = (todayDow + 1) % 7
 
 function todayDateStr() {
   return new Date().toISOString().slice(0, 10)
@@ -79,11 +80,11 @@ export default function ProyeccionComprasPage() {
 
   useEffect(() => { load() }, [load])
 
-  // Pre-fill assignments when opening panel: qty = today's suggested
+  // Pre-fill assignments when opening panel: qty = tomorrow's suggested
   function openPanel() {
     const init = {}
     data.forEach((m) => {
-      const day = m.days[todayDow]
+      const day = m.days[tomorrowDow]
       init[m.material_id] = {
         supplierId: '',
         qty: day && day.suggested > 0 ? Math.ceil(day.suggested) : '',
@@ -228,14 +229,19 @@ export default function ProyeccionComprasPage() {
                     <th
                       key={dow}
                       className={`px-2 py-3 text-center text-xs font-semibold uppercase tracking-wider w-[90px] ${
-                        dow === todayDow
+                        dow === tomorrowDow
                           ? 'bg-[#2f5d50]/8 text-[#2f5d50]'
+                          : dow === todayDow
+                          ? 'text-stone-500'
                           : 'text-stone-400'
                       }`}
                     >
                       {short}
+                      {dow === tomorrowDow && (
+                        <span className="ml-1 text-[10px] font-bold text-[#2f5d50]">mañana</span>
+                      )}
                       {dow === todayDow && (
-                        <span className="ml-1 text-[10px] font-bold text-[#2f5d50]">●</span>
+                        <span className="ml-1 text-[10px] text-stone-400">hoy</span>
                       )}
                     </th>
                   ))}
@@ -261,15 +267,16 @@ export default function ProyeccionComprasPage() {
                       {DAYS.map(({ dow }) => {
                         const day = material.days[dow]
                         const hasDay = day && day.avg > 0
-                        const isToday = dow === todayDow
+                        const isTomorrow = dow === tomorrowDow
+                        const isToday    = dow === todayDow
                         return (
                           <td
                             key={dow}
-                            className={`px-2 py-2 text-center ${isToday ? 'bg-[#2f5d50]/5' : ''} ${hasDay ? cellBg(day, rMax) : ''}`}
+                            className={`px-2 py-2 text-center ${isTomorrow ? 'bg-[#2f5d50]/5' : ''} ${hasDay ? cellBg(day, rMax) : ''}`}
                           >
                             {hasDay ? (
                               <div>
-                                <p className={`text-sm font-bold leading-tight ${isToday ? 'text-[#2f5d50]' : 'text-stone-800'}`}>
+                                <p className={`text-sm font-bold leading-tight ${isTomorrow ? 'text-[#2f5d50]' : isToday ? 'text-stone-600' : 'text-stone-800'}`}>
                                   {fmt(day.suggested)}
                                 </p>
                                 <p className="text-[10px] text-stone-400 leading-tight mt-0.5">
@@ -295,7 +302,7 @@ export default function ProyeccionComprasPage() {
           <div className="border-t border-stone-100 px-5 py-3 flex flex-wrap items-center gap-x-6 gap-y-1 text-xs text-stone-400">
             <span><strong className="text-stone-600">Número grande</strong> = sugerido (prom + 0.5σ)</span>
             <span><strong className="text-stone-500">min–max</strong> = rango histórico de días con recepción</span>
-            <span>Columna <span className="font-semibold text-[#2f5d50]">verde</span> = hoy</span>
+            <span>Columna <span className="font-semibold text-[#2f5d50]">verde</span> = mañana (proyección objetivo)</span>
             <span className="ml-auto">{data.length} materias primas · últimas {weeks} semanas</span>
           </div>
         )}
@@ -359,7 +366,7 @@ export default function ProyeccionComprasPage() {
                 <tbody className="divide-y divide-stone-50">
                   {data.map((m) => {
                     const a = assignments[m.material_id] || {}
-                    const dayData = m.days[todayDow]
+                    const dayData = m.days[tomorrowDow]
                     return (
                       <tr key={m.material_id} className="hover:bg-stone-50/50">
                         <td className="py-3 pr-3">
@@ -367,7 +374,7 @@ export default function ProyeccionComprasPage() {
                           <p className="text-[11px] text-stone-400 font-mono">{m.code}</p>
                           {dayData && dayData.avg > 0 && (
                             <p className="text-[11px] text-[#2f5d50]">
-                              Sugerido hoy: {fmt(dayData.suggested)} {m.base_unit}
+                              Sugerido mañana: {fmt(dayData.suggested)} {m.base_unit}
                             </p>
                           )}
                         </td>

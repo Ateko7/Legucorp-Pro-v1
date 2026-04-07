@@ -7,7 +7,8 @@ export async function getPurchaseOrders() {
       *,
       suppliers (
         id,
-        name
+        name,
+        phone
       ),
       purchase_order_items (
         id,
