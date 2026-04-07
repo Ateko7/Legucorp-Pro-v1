@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import { useRealtimeRefresh } from '../../../hooks/useRealtimeRefresh'
 import Modal from '../../../components/ui/Modal'
 import { createSku, getPackagingMaterials, getSkus } from '../services/skusService'
 
@@ -27,6 +28,7 @@ export default function SkusPage() {
   useEffect(() => {
     loadAll()
   }, [])
+  useRealtimeRefresh(['skus', 'packaging_materials'], loadAll)
 
   async function loadAll() {
     setLoading(true)

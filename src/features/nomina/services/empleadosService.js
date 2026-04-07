@@ -33,16 +33,19 @@ export async function getEmpleado(id) {
 }
 
 async function nextCodigo(orgId) {
-  const { data } = await supabase
-    .from('empleados')
-    .select('codigo_empleado')
-    .eq('organization_id', orgId)
-    .order('created_at', { ascending: false })
-    .limit(1)
-  const last = data?.[0]?.codigo_empleado
-  if (!last) return 'EMP-001'
-  const num = parseInt(last.replace(/\D/g, ''), 10) || 0
-  return `EMP-${String(num + 1).padStart(3, '0')}`
+  const { data, error } = await supabase.rpc('generate_employee_code', {
+    p_organization_id: orgId,
+  })
+
+  if (error) {
+    throw new Error(error.message || 'No se pudo generar el código de empleado')
+  }
+
+  if (!data) {
+    throw new Error('No se pudo obtener el siguiente código de empleado')
+  }
+
+  return data
 }
 
 export async function createEmpleado(payload) {
@@ -138,6 +141,20 @@ export async function updateEmpleado(id, payload) {
     })
     .eq('id', id)
     .eq('organization_id', profile.organization_id)
+  if (error) throw new Error(error.message)
+}
+
+export async function updateEmpleadoSede(id, sedeId) {
+  const profile = await getProfile()
+  const { error } = await supabase
+    .from('empleados')
+    .update({
+      sede_id: sedeId || null,
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', id)
+    .eq('organization_id', profile.organization_id)
+
   if (error) throw new Error(error.message)
 }
 

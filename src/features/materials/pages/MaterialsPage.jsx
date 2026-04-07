@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import { useRealtimeRefresh } from '../../../hooks/useRealtimeRefresh'
 import Modal from '../../../components/ui/Modal'
 import {
   createMaterial,
@@ -48,6 +49,7 @@ export default function MaterialsPage() {
   useEffect(() => {
     loadAll()
   }, [])
+  useRealtimeRefresh(['materials', 'suppliers'], loadAll)
 
   async function loadAll() {
     setLoading(true)

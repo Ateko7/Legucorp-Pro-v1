@@ -1,4 +1,5 @@
 import { useEffect, useState, useCallback } from 'react'
+import { useRealtimeRefresh } from '../../../hooks/useRealtimeRefresh'
 import {
   getCierres,
   getCierreById,
@@ -549,6 +550,7 @@ export default function CierresPage() {
   }, [tab])
 
   useEffect(() => { setSelectedId(null); loadCierres() }, [loadCierres])
+  useRealtimeRefresh(['cierres_produccion', 'orders', 'purchase_orders'], loadCierres)
 
   function handleGenerated(cierre) {
     setSelectedId(cierre.id)

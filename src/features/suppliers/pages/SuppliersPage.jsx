@@ -1,6 +1,25 @@
 import { useEffect, useMemo, useState } from 'react'
 import Modal from '../../../components/ui/Modal'
+import { useRealtimeRefresh } from '../../../hooks/useRealtimeRefresh'
 import { createSupplier, deleteSupplier, getSuppliers, updateSupplier } from '../services/suppliersService'
+
+const TAX_REGIME_OPTIONS = [
+  {
+    value: 'pequeno_contribuyente',
+    label: 'Pequeño contribuyente',
+    hint: 'Factura con 5% IVA.',
+  },
+  {
+    value: 'pagos_trimestrales',
+    label: 'Pagos trimestrales',
+    hint: 'Factura con 12% IVA.',
+  },
+  {
+    value: 'sujeto_a_retencion',
+    label: 'Sujeto a retención',
+    hint: 'Factura con 12% IVA y retención ISR de 5% o 7% si supera Q30,000.',
+  },
+]
 
 const emptyForm = {
   name: '',
@@ -9,7 +28,12 @@ const emptyForm = {
   phone: '',
   email: '',
   payment_days: '',
+  tax_regime: 'pagos_trimestrales',
   status: 'activo',
+}
+
+function taxRegimeLabel(value) {
+  return TAX_REGIME_OPTIONS.find((option) => option.value === value)?.label || 'Sin régimen'
 }
 
 export default function SuppliersPage() {
@@ -28,6 +52,7 @@ export default function SuppliersPage() {
   useEffect(() => {
     loadSuppliers()
   }, [])
+  useRealtimeRefresh(['suppliers'], loadSuppliers)
 
   async function loadSuppliers() {
     setLoading(true)
@@ -58,6 +83,7 @@ export default function SuppliersPage() {
       phone: supplier.phone || '',
       email: supplier.email || '',
       payment_days: String(supplier.payment_days ?? ''),
+      tax_regime: supplier.tax_regime || 'pagos_trimestrales',
       status: supplier.status || 'activo',
     })
     setEditingId(supplier.id)
@@ -126,6 +152,7 @@ export default function SuppliersPage() {
         supplier.contact_name,
         supplier.phone,
         supplier.email,
+        taxRegimeLabel(supplier.tax_regime),
       ]
         .filter(Boolean)
         .some((value) => value.toLowerCase().includes(term))
@@ -141,7 +168,7 @@ export default function SuppliersPage() {
           </p>
           <h1 className="text-3xl font-semibold text-stone-800">Proveedores</h1>
           <p className="mt-2 text-sm text-stone-500">
-            Administra tu red de proveedores y condiciones de pago.
+            Administra tu red de proveedores, régimen tributario y condiciones de pago.
           </p>
         </div>
 
@@ -157,7 +184,7 @@ export default function SuppliersPage() {
         <div className="mb-5 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
           <input
             type="text"
-            placeholder="Buscar por nombre, NIT, contacto, teléfono o correo..."
+            placeholder="Buscar por nombre, NIT, contacto, teléfono, correo o régimen..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             className="w-full rounded-2xl border border-stone-300 bg-stone-50 px-4 py-3 text-sm text-stone-700 outline-none transition focus:border-emerald-700 focus:bg-white focus:ring-4 focus:ring-emerald-100 md:max-w-md"
@@ -202,6 +229,10 @@ export default function SuppliersPage() {
 
                   <div className="text-sm text-stone-500">
                     {supplier.payment_days || 0} días
+                  </div>
+
+                  <div className="text-sm text-stone-500">
+                    {taxRegimeLabel(supplier.tax_regime)}
                   </div>
 
                   <div>
@@ -333,6 +364,25 @@ export default function SuppliersPage() {
                 className="w-full rounded-2xl border border-stone-300 bg-stone-50 px-4 py-3 text-stone-700 outline-none transition focus:border-emerald-700 focus:bg-white focus:ring-4 focus:ring-emerald-100"
               />
             </Field>
+
+            <Field label="Régimen tributario *">
+              <select
+                name="tax_regime"
+                value={form.tax_regime}
+                onChange={handleChange}
+                required
+                className="w-full rounded-2xl border border-stone-300 bg-stone-50 px-4 py-3 text-stone-700 outline-none transition focus:border-emerald-700 focus:bg-white focus:ring-4 focus:ring-emerald-100"
+              >
+                {TAX_REGIME_OPTIONS.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+              <p className="mt-2 text-xs text-stone-500">
+                {TAX_REGIME_OPTIONS.find((option) => option.value === form.tax_regime)?.hint}
+              </p>
+            </Field>
           </div>
 
           {error ? (
@@ -346,6 +396,10 @@ export default function SuppliersPage() {
               {success}
             </div>
           ) : null}
+
+          <div className="rounded-2xl border border-stone-200 bg-stone-50 px-4 py-3 text-xs text-stone-600">
+            El régimen tributario define cómo se calculará IVA y retención cuando la factura del proveedor genere el asiento contable en CxP.
+          </div>
 
           <div className="flex flex-col-reverse gap-3 border-t border-stone-200 pt-5 md:flex-row md:justify-end">
             <button

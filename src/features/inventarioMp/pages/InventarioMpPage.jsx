@@ -4,6 +4,7 @@ import {
   getMaterialInventoryLots,
   updateMaterialInventoryLocation,
 } from '../services/materialInventoryService'
+import { useRealtimeRefresh } from '../../../hooks/useRealtimeRefresh'
 
 export default function InventarioMpPage() {
   const [lots, setLots] = useState([])
@@ -20,6 +21,7 @@ export default function InventarioMpPage() {
   useEffect(() => {
     loadLots()
   }, [])
+  useRealtimeRefresh(['material_inventory_lots'], loadLots)
 
   async function loadLots() {
     setLoading(true)

@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import { useRealtimeRefresh } from '../../../hooks/useRealtimeRefresh'
 import Modal from '../../../components/ui/Modal'
 import { createProductBase, deleteProductBase, getProductBases, updateProductBase } from '../services/productBasesService'
 import {
@@ -56,6 +57,7 @@ export default function ProductBasesPage() {
   const [deleting, setDeleting] = useState(false)
 
   useEffect(() => { loadInitial() }, [])
+  useRealtimeRefresh(['product_bases', 'product_presentations'], loadInitial)
 
   async function loadInitial() {
     setLoading(true)

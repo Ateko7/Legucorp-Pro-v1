@@ -1,11 +1,39 @@
 import { supabase } from '../../../lib/supabase'
 import { getProfile } from './nominaCore'
+import { getCostoLaboralDiaEnVivo } from './marcacionesService'
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function n(v) { const x = Number(v); return isNaN(x) ? 0 : x }
 function r4(v) { return Math.round(n(v) * 10000) / 10000 }
 function r2(v) { return Math.round(n(v) * 100) / 100 }
+
+function construirFilaKpi(fecha, prod, labor) {
+  const libras = n(prod.libras_producidas)
+  const costo = n(labor.costo_laboral_total)
+  const kpiVal = (libras > 0 && costo > 0) ? r4(costo / libras) : null
+
+  let inconsistencia = null
+  if (libras > 0 && labor.total_colaboradores === 0) {
+    inconsistencia = 'Produccion registrada sin marcaciones de empleados'
+  } else if (labor.total_colaboradores > 0 && libras === 0) {
+    inconsistencia = 'Marcaciones registradas sin produccion empacada'
+  } else if (labor.sin_salida > 0) {
+    inconsistencia = `${labor.sin_salida} empleado(s) sin salida registrada`
+  }
+
+  return {
+    fecha,
+    costo_laboral_total_dia: r2(costo),
+    libras_producidas_dia: libras,
+    costo_mano_obra_por_libra: kpiVal,
+    total_colaboradores_marcados: labor.total_colaboradores,
+    total_horas_trabajadas: r2(labor.total_horas_trabajadas),
+    total_horas_extra_preliminares: r2(labor.total_horas_extra),
+    observacion_inconsistencia: inconsistencia,
+    runs_produccion: n(prod.total_runs),
+  }
+}
 
 // ─── Producción diaria desde packaging_runs ──────────────────────────────────
 
@@ -27,6 +55,11 @@ export async function getProduccionDia(fecha, orgId) {
 // ─── Costo laboral del día desde marcaciones ──────────────────────────────────
 
 export async function getCostoLaboralDia(fecha, orgId) {
+  const hoy = new Date().toISOString().slice(0, 10)
+  if (fecha === hoy) {
+    return getCostoLaboralDiaEnVivo(fecha, orgId)
+  }
+
   const { data, error } = await supabase
     .from('v_costo_laboral_diario')
     .select('*')
@@ -55,32 +88,10 @@ export async function calcularYPersistirKpi(fecha, orgId) {
     getCostoLaboralDia(fecha, orgId),
   ])
 
-  const libras   = n(prod.libras_producidas)
-  const costo    = n(labor.costo_laboral_total)
-  const kpiVal   = (libras > 0 && costo > 0) ? r4(costo / libras) : null
-
-  // Detectar inconsistencias
-  let inconsistencia = null
-  if (libras > 0 && labor.total_colaboradores === 0) {
-    inconsistencia = 'Producción registrada sin marcaciones de empleados'
-  } else if (labor.total_colaboradores > 0 && libras === 0) {
-    inconsistencia = 'Marcaciones registradas sin producción empacada'
-  } else if (labor.sin_salida > 0) {
-    inconsistencia = `${labor.sin_salida} empleado(s) sin salida registrada`
-  }
-
   const payload = {
-    organization_id:              orgId,
-    fecha,
-    costo_laboral_total_dia:      r2(costo),
-    libras_producidas_dia:        libras,
-    costo_mano_obra_por_libra:    kpiVal,
-    total_colaboradores_marcados: labor.total_colaboradores,
-    total_horas_trabajadas:       r2(labor.total_horas_trabajadas),
-    total_horas_extra_preliminares: r2(labor.total_horas_extra),
-    observacion_inconsistencia:   inconsistencia,
-    runs_produccion:              n(prod.total_runs),
-    updated_at:                   new Date().toISOString(),
+    organization_id: orgId,
+    ...construirFilaKpi(fecha, prod, labor),
+    updated_at: new Date().toISOString(),
   }
 
   const { error } = await supabase
@@ -88,7 +99,7 @@ export async function calcularYPersistirKpi(fecha, orgId) {
     .upsert(payload, { onConflict: 'organization_id,fecha' })
   if (error) console.error('Error persistiendo KPI:', error.message)
 
-  return { ...payload, kpiVal }
+  return payload
 }
 
 // ─── KPI de hoy ──────────────────────────────────────────────────────────────
@@ -117,6 +128,7 @@ export async function getKpiDia(fecha) {
 export async function getKpiTendencia(dias = 14) {
   const profile   = await getProfile()
   const fechaDesde = new Date(Date.now() - (dias - 1) * 86400000).toISOString().slice(0, 10)
+  const hoy = new Date().toISOString().slice(0, 10)
 
   const { data, error } = await supabase
     .from('kpi_costo_laboral_diario')
@@ -145,6 +157,17 @@ export async function getKpiTendencia(dias = 14) {
       runs_produccion:               0,
     })
   }
+
+  if (fechaDesde <= hoy) {
+    const [prodHoy, laborHoy] = await Promise.all([
+      getProduccionDia(hoy, profile.organization_id),
+      getCostoLaboralDia(hoy, profile.organization_id),
+    ])
+    const filaHoy = construirFilaKpi(hoy, prodHoy, laborHoy)
+    const idxHoy = resultado.findIndex(d => d.fecha === hoy)
+    if (idxHoy >= 0) resultado[idxHoy] = filaHoy
+  }
+
   return resultado
 }
 

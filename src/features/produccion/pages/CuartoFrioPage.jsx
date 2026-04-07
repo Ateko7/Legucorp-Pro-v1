@@ -3,6 +3,7 @@ import {
   getColdRoomDashboard,
   updateColdRoomLotStatus,
 } from '../services/coldRoomService'
+import { useRealtimeRefresh } from '../../../hooks/useRealtimeRefresh'
 
 function n(value) { const x = Number(value); return Number.isNaN(x) ? 0 : x }
 function fmt(value) { return n(value).toLocaleString('es-GT', { minimumFractionDigits: 0, maximumFractionDigits: 2 }) }
@@ -43,6 +44,7 @@ export default function CuartoFrioPage() {
   const [statusFilter, setStatusFilter] = useState('todos')
 
   useEffect(() => { loadAll() }, [])
+  useRealtimeRefresh(['processed_inventory_lots', 'finished_inventory_lots'], loadAll)
 
   async function loadAll() {
     setLoading(true); setError('')
@@ -204,16 +206,20 @@ export default function CuartoFrioPage() {
                         </span>
                       </td>
                       <td className="px-4 py-3">
-                        <select
-                          value={lot.status}
-                          onChange={(e) => handleStatusChange(lot.id, e.target.value)}
-                          disabled={savingId === lot.id}
-                          className="rounded-lg border border-stone-300 bg-white px-2 py-1.5 text-xs text-stone-700 outline-none transition focus:border-[#2f5d50] focus:ring-2 focus:ring-[#2f5d50]/10 disabled:opacity-50"
-                        >
-                          <option value="disponible">Disponible</option>
-                          <option value="bloqueado">Bloqueado</option>
-                          <option value="agotado">Agotado</option>
-                        </select>
+                        {lot.status === 'agotado' ? (
+                          <span className="text-xs text-stone-400 italic">Agotado</span>
+                        ) : (
+                          <select
+                            value={lot.status}
+                            onChange={(e) => handleStatusChange(lot.id, e.target.value)}
+                            disabled={savingId === lot.id}
+                            className="rounded-lg border border-stone-300 bg-white px-2 py-1.5 text-xs text-stone-700 outline-none transition focus:border-[#2f5d50] focus:ring-2 focus:ring-[#2f5d50]/10 disabled:opacity-50"
+                          >
+                            <option value="disponible">Disponible</option>
+                            <option value="bloqueado">Bloqueado</option>
+                            <option value="agotado">Agotado</option>
+                          </select>
+                        )}
                       </td>
                     </tr>
                   )

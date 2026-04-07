@@ -1,4 +1,5 @@
 import { useEffect, useState, useCallback } from 'react'
+import { useRealtimeRefresh } from '../../../hooks/useRealtimeRefresh'
 import {
   getLogisticsOrders,
   getOrderForDelivery,
@@ -469,6 +470,7 @@ export default function LogisticaPage() {
   }, [])
 
   useEffect(() => { loadOrders() }, [loadOrders])
+  useRealtimeRefresh(['orders', 'order_items'], loadOrders)
 
   const filtered = statusFilter === 'todos'
     ? orders

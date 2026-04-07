@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useRealtimeRefresh } from '../../../hooks/useRealtimeRefresh'
 import {
   calculateRecipeRequirements,
   getPackagingFormData,
@@ -883,6 +884,7 @@ export default function EmpaquePage() {
   const activeOrdersRef = useRef(null)
 
   useEffect(() => { loadAll() }, [])
+  useRealtimeRefresh(['orders', 'order_items', 'finished_inventory_lots'], loadAll)
 
   async function loadAll() {
     setLoading(true)

@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import { useRealtimeRefresh } from '../../../hooks/useRealtimeRefresh'
 import Modal from '../../../components/ui/Modal'
 import {
   deleteProductBaseRecipe,
@@ -33,6 +34,7 @@ export default function ProductBaseRecipesPage() {
   useEffect(() => {
     loadAll()
   }, [])
+  useRealtimeRefresh(['product_bases', 'product_base_recipes', 'materials'], loadAll)
 
   async function loadAll() {
     setLoading(true)

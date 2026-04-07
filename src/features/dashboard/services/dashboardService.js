@@ -12,6 +12,7 @@ function n(v) { return Number(v || 0) }
 
 export async function getOperativoDashboard() {
   const orgId = await getOrgId()
+  const hace30d = new Date(Date.now() - 29 * 86400000).toISOString()
 
   const [
     ordersRes,
@@ -22,6 +23,7 @@ export async function getOperativoDashboard() {
     revenueByDayRes,
     processRunsRes,
     purchaseOrdersRes,
+    wasteByStageRes,
   ] = await Promise.allSettled([
 
     // 1. Pedidos por estado
@@ -77,6 +79,13 @@ export async function getOperativoDashboard() {
       .select('id, order_number, status, created_at, suppliers(name)')
       .eq('organization_id', orgId)
       .in('status', ['enviada', 'parcial']),
+
+    // 9. Merma por proceso (últimos 30 días)
+    supabase
+      .from('material_process_stage_outputs')
+      .select('process_run_id, stage, input_quantity, output_quantity, created_at')
+      .eq('organization_id', orgId)
+      .gte('created_at', hace30d),
   ])
 
   // ── Pedidos ────────────────────────────────────────────────────────────────
@@ -137,6 +146,34 @@ export async function getOperativoDashboard() {
   // ── OC pendientes ──────────────────────────────────────────────────────────
   const pendingPOs = purchaseOrdersRes.status === 'fulfilled' ? purchaseOrdersRes.value.data || [] : []
 
+  // ─── Merma por proceso ───────────────────────────────────────────────────────
+  const wasteRows = wasteByStageRes.status === 'fulfilled' ? wasteByStageRes.value.data || [] : []
+  const stageRunMap = wasteRows.reduce((acc, row) => {
+    const key = `${row.stage}:${row.process_run_id}`
+    if (!acc[key]) {
+      acc[key] = { stage: row.stage, input: 0, output: 0 }
+    }
+    acc[key].input = Math.max(acc[key].input, n(row.input_quantity))
+    acc[key].output += n(row.output_quantity)
+    return acc
+  }, {})
+
+  const wasteStageMap = Object.values(stageRunMap).reduce((acc, row) => {
+    if (!acc[row.stage]) acc[row.stage] = { stage: row.stage, input: 0, output: 0, waste: 0, pct: 0 }
+    acc[row.stage].input += row.input
+    acc[row.stage].output += row.output
+    return acc
+  }, {})
+
+  Object.values(wasteStageMap).forEach(stage => {
+    stage.waste = Math.max(0, stage.input - stage.output)
+    stage.pct = stage.input > 0 ? (stage.waste / stage.input) * 100 : 0
+  })
+
+  const mermaPorProceso = ['deshoje', 'lavado', 'secado'].map(stage => (
+    wasteStageMap[stage] || { stage, input: 0, output: 0, waste: 0, pct: 0 }
+  ))
+
   return {
     orders: { byStatus: ordersByStatus, total: orders.length, totalRevenue, pendingRevenue },
     inventory: { items: inventoryItems, totalUnits: totalFinishedUnits },
@@ -146,6 +183,7 @@ export async function getOperativoDashboard() {
     revenueChart,
     processRuns,
     pendingPOs,
+    mermaPorProceso,
   }
 }
 

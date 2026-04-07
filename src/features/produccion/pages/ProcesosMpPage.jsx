@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import { useRealtimeRefresh } from '../../../hooks/useRealtimeRefresh'
 import {
   advanceOutputToNextStage,
   createInitialProcessRun,
@@ -762,6 +763,7 @@ export default function ProcesosMpPage() {
   useEffect(() => {
     loadData()
   }, [])
+  useRealtimeRefresh(['material_process_runs', 'material_inventory_lots'], loadData)
 
   async function handleCreateInitialProcess(payload) {
     try {
@@ -805,7 +807,7 @@ export default function ProcesosMpPage() {
 
       setSelectedProcessedOutput(null)
       setSuccess(
-        `Lote enviado a inventario procesado. CXP generada por ${formatNumber(
+        `Lote enviado a inventario procesado. Quedo una CXP pendiente de factura por ${formatNumber(
           result?.settlement?.payableAmount
         )}.`
       )
@@ -834,7 +836,7 @@ export default function ProcesosMpPage() {
       <div className="flex flex-col gap-2">
         <h1 className="text-2xl font-bold text-stone-900">Procesos MP</h1>
         <p className="text-stone-600">
-          Seguimiento de lotes activos en proceso. La liquidación final del costo se realiza al enviar el secado a inventario procesado.
+          Seguimiento de lotes activos en proceso. La liquidacion final del costo se realiza al enviar el secado a inventario procesado y la factura del proveedor habilita el pago en CxP.
         </p>
       </div>
 

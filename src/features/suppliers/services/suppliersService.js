@@ -21,6 +21,7 @@ export async function createSupplier(payload) {
     phone,
     email,
     payment_days,
+    tax_regime = 'pagos_trimestrales',
     status = 'activo',
   } = payload
 
@@ -57,6 +58,7 @@ export async function createSupplier(payload) {
       phone: phone || null,
       email: email || null,
       payment_days: Number(payment_days || 0),
+      tax_regime,
       status,
       created_by: user.id,
     })
@@ -79,7 +81,7 @@ export async function deleteSupplier(id) {
 }
 
 export async function updateSupplier(id, payload) {
-  const { name, nit, contact_name, phone, email, payment_days, status } = payload
+  const { name, nit, contact_name, phone, email, payment_days, tax_regime, status } = payload
 
   const { error } = await supabase
     .from('suppliers')
@@ -90,6 +92,7 @@ export async function updateSupplier(id, payload) {
       phone: phone || null,
       email: email || null,
       payment_days: Number(payment_days || 0),
+      tax_regime,
       status,
     })
     .eq('id', id)

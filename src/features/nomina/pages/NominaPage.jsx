@@ -1,4 +1,5 @@
 import { useEffect, useState, useMemo, useCallback } from 'react'
+import { useRealtimeRefresh } from '../../../hooks/useRealtimeRefresh'
 import Modal from '../../../components/ui/Modal'
 import {
   getEmpleados, getEmpleado, createEmpleado, updateEmpleado, darBajaEmpleado,
@@ -17,7 +18,8 @@ import {
   calcularHorasDia, calcularHorasTeoricas,
 } from '../services/marcacionesService'
 import { getSedes, createSede, updateSede, deleteSede } from '../services/sedesService'
-import { getKpiTendencia, getKpiResumen, getAlertas, calcularYPersistirKpi } from '../services/costoLaboralService'
+import { getKpiTendencia, getKpiResumen, getAlertas, calcularYPersistirKpi, getKpiHoy } from '../services/costoLaboralService'
+import { getBankAccounts } from '../../contabilidad/services/contabilidadService'
 import {
   getVacaciones, createVacaciones, updateVacacionesEstado, getSaldoVacaciones,
   getIncapacidades, createIncapacidad, updateIncapacidadEstado,
@@ -189,7 +191,6 @@ function TabEmpleados() {
   const [showHistorial, setShowHistorial] = useState(false)
   const [showCambioSalarial, setShowCambioSalarial] = useState(false)
   const [cambioForm, setCambioForm] = useState({ salario_base: '', bonificacion_incentivo: '250', tipo_pago: 'mensual', afiliado_igss: true, fecha_inicio: '', observaciones: '' })
-
   const load = useCallback(async () => {
     setLoading(true)
     try {
@@ -202,6 +203,14 @@ function TabEmpleados() {
   }, [])
 
   useEffect(() => { load() }, [load])
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+      load()
+    }, 60000)
+    return () => clearInterval(timer)
+  }, [load])
+  useRealtimeRefresh(['employees', 'cost_centers'], load)
 
   function openNew() { setForm(emptyEmpForm); setEditingId(null); setError(''); setSuccess(''); setShowModal(true) }
   function openEdit(emp) {
@@ -744,35 +753,43 @@ function TabAsistencia() {
   const [marcaciones, setMarcaciones] = useState([])
   const [empleados, setEmpleados] = useState([])
   const [jornada, setJornada]   = useState(null)
+  const [hoyKpi, setHoyKpi]     = useState(null)
   const [loading, setLoading]   = useState(true)
   const [viewMode, setViewMode] = useState('resumen') // 'resumen' | 'detalle'
   const [error, setError]       = useState('')
+  const incluyeHoy = fechaIni <= hoy && fechaFin >= hoy
 
   const load = useCallback(async () => {
     setLoading(true); setError('')
     try {
-      const [r, emps, j] = await Promise.all([
+      const [r, emps, j, kpiHoy] = await Promise.all([
         getResumenAsistencia(fechaIni, fechaFin),
         getEmpleados({ estado: 'activo' }),
         getJornada(),
+        getKpiHoy(),
       ])
       setResumen(r)
       setEmpleados(emps)
       setJornada(j)
+      setHoyKpi(kpiHoy)
     } catch(e) { setError(e.message) }
     finally { setLoading(false) }
   }, [fechaIni, fechaFin])
 
   useEffect(() => { load() }, [load])
 
-  async function loadDetalle() {
+  const loadDetalle = useCallback(async () => {
     setLoading(true)
     try {
-      const data = await getMarcaciones({ fechaInicio: fechaIni, fechaFin, empleadoId: empFiltro || undefined })
+      const [data, kpiHoy] = await Promise.all([
+        getMarcaciones({ fechaInicio: fechaIni, fechaFin, empleadoId: empFiltro || undefined }),
+        getKpiHoy(),
+      ])
       setMarcaciones(data)
+      setHoyKpi(kpiHoy)
     } catch(e) { setError(e.message) }
     finally { setLoading(false) }
-  }
+  }, [fechaIni, fechaFin, empFiltro])
 
   async function handleAprobar(id) {
     try {
@@ -783,6 +800,18 @@ function TabAsistencia() {
 
   // Calcular horas teóricas del período para el resumen
   const calcInfo = jornada ? calcularHorasTeoricas(fechaIni, fechaFin, jornada) : null
+  const totalPeriodoHoras = resumen.reduce((acc, item) => acc + n(item.horasTrabajadas), 0)
+  const totalPeriodoExtra = resumen.reduce((acc, item) => acc + n(item.horasExtra), 0)
+  const totalPeriodoCosto = resumen.reduce((acc, item) => acc + n(item.costoTotal), 0)
+
+  useEffect(() => {
+    if (!incluyeHoy) return undefined
+    const timer = setInterval(() => {
+      if (viewMode === 'detalle') loadDetalle()
+      else load()
+    }, 60000)
+    return () => clearInterval(timer)
+  }, [incluyeHoy, viewMode, load, empFiltro, fechaIni, fechaFin])
 
   return (
     <div className="space-y-6">
@@ -824,6 +853,12 @@ function TabAsistencia() {
         </div>
       )}
 
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+        <KPI label="Horas hoy" value={hoyKpi ? `${fmt(hoyKpi.total_horas_trabajadas)}h` : '—'} color="text-[#2f5d50]" />
+        <KPI label="Horas extra hoy" value={hoyKpi && n(hoyKpi.total_horas_extra_preliminares) > 0 ? `+${fmt(hoyKpi.total_horas_extra_preliminares)}h` : '—'} color="text-amber-600" />
+        <KPI label="Costo M.O. hoy" value={hoyKpi ? fmtQ(hoyKpi.costo_laboral_total_dia) : '—'} sub={hoyKpi ? `${hoyKpi.total_colaboradores_marcados} colaboradores` : ''} />
+      </div>
+
       {error && <p className="rounded-2xl bg-red-50 px-4 py-3 text-sm text-red-700">{error}</p>}
 
       {loading ? (
@@ -834,14 +869,14 @@ function TabAsistencia() {
           <table className="min-w-full text-sm">
             <thead className="bg-stone-50 text-xs font-semibold uppercase text-stone-500">
               <tr>
-                {['Empleado','Código','Días reg.','H. Trabajadas','H. Extra','Días incompletos','Días en revisión'].map(h => (
+                {['Empleado','Código','Días reg.','H. Trabajadas','H. Extra','Costo M.O.','Días incompletos','Días en revisión'].map(h => (
                   <th key={h} className="px-4 py-3 text-left whitespace-nowrap">{h}</th>
                 ))}
               </tr>
             </thead>
             <tbody className="divide-y divide-stone-100">
               {resumen.length === 0 && (
-                <tr><td colSpan={7} className="py-8 text-center text-stone-400">Sin datos en el período</td></tr>
+                <tr><td colSpan={8} className="py-8 text-center text-stone-400">Sin datos en el período</td></tr>
               )}
               {resumen.map((r, i) => (
                 <tr key={i} className="hover:bg-stone-50">
@@ -856,6 +891,9 @@ function TabAsistencia() {
                   <td className="px-4 py-2 text-right tabular-nums text-amber-600 font-semibold">
                     {r.horasExtra > 0 ? `+${r.horasExtra.toFixed(2)}h` : '—'}
                   </td>
+                  <td className="px-4 py-2 text-right tabular-nums font-semibold text-stone-700">
+                    {fmtQ(r.costoTotal)}
+                  </td>
                   <td className="px-4 py-2 text-center">
                     {r.diasIncompletos > 0
                       ? <Badge text={String(r.diasIncompletos)} color="bg-amber-100 text-amber-700" />
@@ -869,6 +907,17 @@ function TabAsistencia() {
                 </tr>
               ))}
             </tbody>
+            {resumen.length > 0 && (
+              <tfoot className="bg-stone-50 text-sm font-semibold text-stone-700">
+                <tr>
+                  <td className="px-4 py-3" colSpan={3}>Totales del período</td>
+                  <td className="px-4 py-3 text-right tabular-nums">{fmt(totalPeriodoHoras)}h</td>
+                  <td className="px-4 py-3 text-right tabular-nums text-amber-600">{totalPeriodoExtra > 0 ? `+${fmt(totalPeriodoExtra)}h` : '—'}</td>
+                  <td className="px-4 py-3 text-right tabular-nums">{fmtQ(totalPeriodoCosto)}</td>
+                  <td className="px-4 py-3" colSpan={2}></td>
+                </tr>
+              </tfoot>
+            )}
           </table>
         </Card>
       ) : (
@@ -877,14 +926,14 @@ function TabAsistencia() {
           <table className="min-w-full text-sm">
             <thead className="bg-stone-50 text-xs font-semibold uppercase text-stone-500">
               <tr>
-                {['Empleado','Fecha','Día','Entrada','Salida','H.Trab','H.Teór','Exceso','Estado',''].map(h => (
+                {['Empleado','Fecha','Día','Entrada','Salida','H.Trab','H.Teór','Exceso','Costo','Estado',''].map(h => (
                   <th key={h} className="px-4 py-3 text-left whitespace-nowrap">{h}</th>
                 ))}
               </tr>
             </thead>
             <tbody className="divide-y divide-stone-100">
               {marcaciones.length === 0 && (
-                <tr><td colSpan={10} className="py-8 text-center text-stone-400">Sin marcaciones</td></tr>
+                <tr><td colSpan={11} className="py-8 text-center text-stone-400">Sin marcaciones</td></tr>
               )}
               {marcaciones.map(m => {
                 const dow = ['Dom','Lun','Mar','Mié','Jue','Vie','Sáb'][new Date(m.fecha+'T12:00:00').getDay()]
@@ -906,8 +955,14 @@ function TabAsistencia() {
                     <td className="px-4 py-2 text-right tabular-nums text-amber-600 font-semibold">
                       {n(m.exceso_dia)>0 ? `+${Number(m.exceso_dia).toFixed(2)}` : '—'}
                     </td>
+                    <td className="px-4 py-2 text-right tabular-nums font-semibold text-stone-700">
+                      {m.costo_total_preliminar_dia != null ? fmtQ(m.costo_total_preliminar_dia) : '—'}
+                    </td>
                     <td className="px-4 py-2">
-                      <Badge text={m.estado?.replace('_',' ')} color={MARC_ESTADO_COLOR[m.estado]||''} />
+                      <div className="flex items-center gap-2">
+                        <Badge text={m.estado?.replace('_',' ')} color={MARC_ESTADO_COLOR[m.estado]||''} />
+                        {m.en_vivo && <Badge text="en vivo" color="bg-blue-100 text-blue-700" />}
+                      </div>
                     </td>
                     <td className="px-4 py-2">
                       {m.estado==='pendiente_revision' && (
@@ -976,6 +1031,13 @@ function TabCostoLaboral() {
 
   useEffect(() => { load() }, [load])
 
+  useEffect(() => {
+    const timer = setInterval(() => {
+      load()
+    }, 60000)
+    return () => clearInterval(timer)
+  }, [load])
+
   async function handleRecalc() {
     setRecalcBusy(true); setRecalcMsg('')
     try {
@@ -1016,7 +1078,7 @@ function TabCostoLaboral() {
         <div className="flex justify-center py-8"><Spinner /></div>
       ) : (
         <>
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-6">
             <KPI
               label="Costo MO/lb hoy"
               value={hoyData?.costo_mano_obra_por_libra != null ? `Q ${fmt(hoyData.costo_mano_obra_por_libra)}` : '—'}
@@ -1033,6 +1095,16 @@ function TabCostoLaboral() {
               value={hoyData ? `${fmt(hoyData.libras_producidas_dia)} lb` : '—'}
               color="text-stone-700"
               sub={hoyData?.runs_produccion ? `${hoyData.runs_produccion} runs` : ''}
+            />
+            <KPI
+              label="Horas hoy"
+              value={hoyData ? `${fmt(hoyData.total_horas_trabajadas)}h` : '—'}
+              color="text-[#2f5d50]"
+            />
+            <KPI
+              label="Horas extra hoy"
+              value={hoyData && n(hoyData.total_horas_extra_preliminares) > 0 ? `+${fmt(hoyData.total_horas_extra_preliminares)}h` : '—'}
+              color="text-amber-600"
             />
             <KPI
               label="Tendencia 7 días"
@@ -1323,14 +1395,24 @@ function TabCalculo() {
   const [selectedDet, setSelectedDet] = useState(null)
   const [conceptos, setConceptos] = useState([])
 
-  useEffect(() => { getPeriodos().then(setPeriodos).catch(e => setError(e.message)) }, [])
-
-  async function handleLoadDetalle(pid) {
+  const handleLoadDetalle = useCallback(async (pid) => {
     setSelectedPeriodo(pid); setLoading(true); setError('')
     try { setDetalles(await getNominaDetalle(pid)) }
     catch (e) { setError(e.message) }
     finally { setLoading(false) }
-  }
+  }, [])
+
+  useEffect(() => {
+    let ignore = false
+    getPeriodos()
+      .then((items) => {
+        if (ignore) return
+        setPeriodos(items || [])
+        if (!selectedPeriodo && items?.length) handleLoadDetalle(items[0].id)
+      })
+      .catch(e => { if (!ignore) setError(e.message) })
+    return () => { ignore = true }
+  }, [handleLoadDetalle, selectedPeriodo])
 
   async function handleVerConceptos(det) {
     setSelectedDet(det)
@@ -1378,6 +1460,12 @@ function TabCalculo() {
       </div>
 
       {error && <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>}
+
+      {!loading && periodos.length === 0 && (
+        <Card>
+          <div className="py-8 text-center text-sm text-stone-400">No hay períodos de nómina creados todavía.</div>
+        </Card>
+      )}
 
       {detalles.length > 0 && (
         <>
@@ -2068,9 +2156,10 @@ function generarLiquidacionPDF(liq) {
 function TabPagos() {
   const [pagos, setPagos] = useState([])
   const [periodos, setPeriodos] = useState([])
+  const [bankAccounts, setBankAccounts] = useState([])
   const [loading, setLoading] = useState(true)
   const [showModal, setShowModal] = useState(false)
-  const [form, setForm] = useState({ periodo_id: '', fecha_pago: '', banco_origen: '', cuenta_origen: '', observaciones: '' })
+  const [form, setForm] = useState({ periodo_id: '', fecha_pago: '', bank_account_id: '', banco_origen: '', cuenta_origen: '', observaciones: '' })
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
   const [selectedPago, setSelectedPago] = useState(null)
@@ -2079,17 +2168,41 @@ function TabPagos() {
   const load = useCallback(async () => {
     setLoading(true)
     try {
-      const [p, per] = await Promise.all([getPagosNomina(), getPeriodos()])
-      setPagos(p); setPeriodos(per)
+      const [p, per, banks] = await Promise.all([getPagosNomina(), getPeriodos(), getBankAccounts()])
+      setPagos(p)
+      setPeriodos(per)
+      setBankAccounts(banks || [])
+      setForm(prev => (
+        prev.bank_account_id || !(banks || []).length
+          ? prev
+          : { ...prev, bank_account_id: banks[0].id }
+      ))
     } catch (e) { setError(e.message) }
     finally { setLoading(false) }
   }, [])
 
   useEffect(() => { load() }, [load])
 
+  const selectedBankAccount = useMemo(
+    () => bankAccounts.find(account => account.id === form.bank_account_id) || null,
+    [bankAccounts, form.bank_account_id]
+  )
+
   async function handleGenerar(e) {
     e.preventDefault(); setSaving(true); setError('')
-    try { await generarLotePago(form.periodo_id, form); await load(); setShowModal(false) }
+    try {
+      await generarLotePago(form.periodo_id, form)
+      await load()
+      setShowModal(false)
+      setForm({
+        periodo_id: '',
+        fecha_pago: '',
+        bank_account_id: bankAccounts[0]?.id || '',
+        banco_origen: '',
+        cuenta_origen: '',
+        observaciones: '',
+      })
+    }
     catch (e) { setError(e.message) }
     finally { setSaving(false) }
   }
@@ -2103,7 +2216,12 @@ function TabPagos() {
     <div className="space-y-4">
       <div className="flex justify-between items-center">
         <h2 className="text-lg font-semibold text-stone-800">Pagos de nómina</h2>
-        <button onClick={() => setShowModal(true)} className="rounded-2xl bg-[#2f5d50] px-4 py-2.5 text-sm font-semibold text-white hover:bg-[#264c42]">+ Generar lote de pago</button>
+        <button
+          onClick={() => setShowModal(true)}
+          className="rounded-2xl bg-[#2f5d50] px-4 py-2.5 text-sm font-semibold text-white hover:bg-[#264c42]"
+        >
+          + Generar lote de pago
+        </button>
       </div>
       {error && <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>}
       <Card>
@@ -2137,12 +2255,36 @@ function TabPagos() {
             </select>
           </Field>
           <Field label="Fecha de pago *"><input type="date" value={form.fecha_pago} onChange={e => setForm(p => ({...p, fecha_pago: e.target.value}))} required className={INP} /></Field>
-          <div className="grid gap-4 md:grid-cols-2">
-            <Field label="Banco origen"><input value={form.banco_origen} onChange={e => setForm(p => ({...p, banco_origen: e.target.value}))} className={INP} /></Field>
-            <Field label="Cuenta origen"><input value={form.cuenta_origen} onChange={e => setForm(p => ({...p, cuenta_origen: e.target.value}))} className={INP} /></Field>
-          </div>
+          <Field label="Cuenta bancaria de origen *">
+            <select
+              value={form.bank_account_id}
+              onChange={e => setForm(p => ({ ...p, bank_account_id: e.target.value }))}
+              required
+              className={INP}
+            >
+              <option value="">Seleccionar cuenta</option>
+              {bankAccounts.map(account => (
+                <option key={account.id} value={account.id}>
+                  {account.bank_name} · {account.account_number} · {account.name}
+                </option>
+              ))}
+            </select>
+          </Field>
+          {selectedBankAccount ? (
+            <div className="rounded-2xl bg-stone-50 px-4 py-3 text-sm text-stone-600">
+              <div className="font-medium text-stone-800">{selectedBankAccount.name}</div>
+              <div className="mt-1">{selectedBankAccount.bank_name} · {selectedBankAccount.account_number}</div>
+              <div className="mt-1 text-xs text-stone-500">
+                Cuenta contable {selectedBankAccount.accounting_accounts?.code || '—'} · {selectedBankAccount.currency || 'GTQ'}
+              </div>
+            </div>
+          ) : (
+            <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-700">
+              Debes crear al menos una cuenta bancaria en Contabilidad &gt; Conciliación bancaria.
+            </div>
+          )}
           {error && <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>}
-          <div className="flex justify-end gap-3"><button type="button" onClick={() => setShowModal(false)} className="rounded-2xl border border-stone-300 px-4 py-2 text-sm font-semibold text-stone-700">Cancelar</button><button type="submit" disabled={saving} className="rounded-2xl bg-[#2f5d50] px-4 py-2 text-sm font-semibold text-white disabled:opacity-60">{saving ? 'Generando...' : 'Generar lote'}</button></div>
+          <div className="flex justify-end gap-3"><button type="button" onClick={() => setShowModal(false)} className="rounded-2xl border border-stone-300 px-4 py-2 text-sm font-semibold text-stone-700">Cancelar</button><button type="submit" disabled={saving || !selectedBankAccount} className="rounded-2xl bg-[#2f5d50] px-4 py-2 text-sm font-semibold text-white disabled:opacity-60">{saving ? 'Generando...' : 'Generar lote'}</button></div>
         </form>
       </Modal>
 
@@ -2185,16 +2327,26 @@ function TabReportes() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
 
-  useEffect(() => { getPeriodos().then(setPeriodos).catch(() => {}) }, [])
-
-  async function handleLoad(pid) {
+  const handleLoad = useCallback(async (pid) => {
     setSelectedPeriodo(pid); setLoading(true); setError('')
     try {
       const [d, p] = await Promise.all([getNominaDetalle(pid), getProvisionesAcumuladas()])
       setDetalles(d); setProvisiones(p.filter(pr => pr.periodo_id === pid))
     } catch (e) { setError(e.message) }
     finally { setLoading(false) }
-  }
+  }, [])
+
+  useEffect(() => {
+    let ignore = false
+    getPeriodos()
+      .then((items) => {
+        if (ignore) return
+        setPeriodos(items || [])
+        if (!selectedPeriodo && items?.length) handleLoad(items[0].id)
+      })
+      .catch((e) => { if (!ignore) setError(e.message) })
+    return () => { ignore = true }
+  }, [handleLoad, selectedPeriodo])
 
   const resumen = useMemo(() => calcularResumenPeriodo(detalles), [detalles])
 
@@ -2232,6 +2384,12 @@ function TabReportes() {
       </div>
 
       {error && <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>}
+
+      {!loading && periodos.length === 0 && (
+        <Card>
+          <div className="py-8 text-center text-sm text-stone-400">No hay períodos de nómina para reportar todavía.</div>
+        </Card>
+      )}
 
       {detalles.length > 0 && (
         <>
@@ -2292,6 +2450,12 @@ function TabReportes() {
             </table>
           </Card>
         </>
+      )}
+
+      {!loading && periodos.length > 0 && selectedPeriodo && detalles.length === 0 && !error && (
+        <Card>
+          <div className="py-8 text-center text-sm text-stone-400">Este período todavía no tiene cálculo de nómina generado.</div>
+        </Card>
       )}
     </div>
   )
@@ -2682,3 +2846,5 @@ function TabSedes() {
     </div>
   )
 }
+
+

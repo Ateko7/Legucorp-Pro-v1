@@ -10,7 +10,7 @@ async function getOrgId() {
   return data.organization_id
 }
 
-const ORG_FIELDS = 'id, name, address, phone, email, rtn, city, country, invitation_code'
+const ORG_FIELDS = 'id, name, address, phone, email, rtn, city, country, invitation_code, operator_invitation_code'
 
 export async function getOrganization() {
   const orgId = await getOrgId()
@@ -52,6 +52,20 @@ export async function regenerateInviteCode() {
   const { data, error } = await supabase
     .from('organizations')
     .update({ invitation_code: code, updated_at: new Date().toISOString() })
+    .eq('id', orgId)
+    .select(ORG_FIELDS)
+    .single()
+  if (error) throw new Error(error.message)
+  return data
+}
+
+export async function regenerateOperatorInviteCode() {
+  const orgId = await getOrgId()
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'
+  const code = Array.from({ length: 8 }, () => chars[Math.floor(Math.random() * chars.length)]).join('')
+  const { data, error } = await supabase
+    .from('organizations')
+    .update({ operator_invitation_code: code, updated_at: new Date().toISOString() })
     .eq('id', orgId)
     .select(ORG_FIELDS)
     .single()

@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { useRealtimeRefresh } from '../../../hooks/useRealtimeRefresh'
 import {
   getProcessedInventoryDashboard,
   updateProcessedInventoryLot,
@@ -218,6 +219,7 @@ export default function InventarioProcesadoPage() {
   useEffect(() => {
     loadData();
   }, []);
+  useRealtimeRefresh(['processed_inventory_lots'], loadData)
 
   const filteredLots = useMemo(() => {
     return lots.filter((lot) => {

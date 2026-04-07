@@ -63,8 +63,8 @@ export async function deleteSalesperson(id) {
   if (error) throw new Error(error.message)
 }
 
-// ─── Generar comisión al facturar pedido ───────────────────────────────────────
-// Llama a esta función desde pedidosService cuando status → 'facturado'
+// ─── Generar comisión al cobrar pedido ───────────────────────────────────────
+// Llama a esta función desde CxC cuando status → 'cobrado'
 // Calcula 4% (o el % del vendedor) sobre total sin IVA
 
 export async function generateSalesCommission(orderId) {
@@ -90,6 +90,17 @@ export async function generateSalesCommission(orderId) {
 
   const salesperson = order.clients?.salespeople
   if (!salesperson) return null  // venta directa, sin comisión
+
+  // Evita duplicar comisión si ya fue generada antes para este pedido.
+  const { data: existingExpense } = await supabase
+    .from('expenses')
+    .select('id')
+    .eq('organization_id', orgId)
+    .eq('expense_type', 'comercial')
+    .eq('source_order_id', orderId)
+    .maybeSingle()
+
+  if (existingExpense?.id) return null
 
   // 2. Calcular base sin IVA
   const total      = Number(order.total || 0)
@@ -178,7 +189,7 @@ export async function getCommissionSummary({ dateFrom, dateTo } = {}) {
     .from('expenses')
     .select(`
       amount, expense_date, description, source_order_id,
-      orders!source_order_id ( order_number, total )
+      orders!source_order_id ( order_number, total, status )
     `)
     .eq('organization_id', profile.organization_id)
     .eq('expense_type', 'comercial')
@@ -189,5 +200,5 @@ export async function getCommissionSummary({ dateFrom, dateTo } = {}) {
 
   const { data, error } = await query
   if (error) throw new Error(error.message)
-  return data || []
+  return (data || []).filter((row) => row.orders?.status === 'cobrado')
 }

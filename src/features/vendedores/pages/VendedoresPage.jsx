@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import { useRealtimeRefresh } from '../../../hooks/useRealtimeRefresh'
 import Modal from '../../../components/ui/Modal'
 import {
   createSalesperson,
@@ -30,6 +31,7 @@ export default function VendedoresPage() {
   const [deleting, setDeleting] = useState(false)
 
   useEffect(() => { loadAll() }, [])
+  useRealtimeRefresh(['salespeople'], loadAll)
 
   async function loadAll() {
     setLoading(true)
@@ -147,7 +149,7 @@ export default function VendedoresPage() {
           </p>
           <h1 className="text-3xl font-semibold text-stone-800">Vendedores</h1>
           <p className="mt-2 text-sm text-stone-500">
-            Gestiona tu fuerza de ventas. Las comisiones se generan automáticamente al facturar pedidos.
+            Gestiona tu fuerza de ventas. Las comisiones solo se generan cuando la CxC del pedido queda cobrada.
           </p>
         </div>
         <button
@@ -353,7 +355,7 @@ export default function VendedoresPage() {
           </div>
 
           <div className="rounded-2xl border border-stone-200 bg-stone-50 px-4 py-3 text-sm text-stone-600">
-            La comisión se calcula sobre el total <strong>sin IVA</strong> del pedido y se registra automáticamente como gasto comercial al facturar.
+            La comisión se calcula sobre el total <strong>sin IVA</strong> del pedido y solo se registra automáticamente cuando el pedido se marca como <strong>cobrado</strong>.
           </div>
 
           {error && (

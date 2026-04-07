@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import { getProyeccionData } from '../services/proyeccionService'
+import { useRealtimeRefresh } from '../../../hooks/useRealtimeRefresh'
 import {
   getSuppliersForPurchaseOrders,
   createPurchaseOrder,
@@ -79,6 +80,7 @@ export default function ProyeccionComprasPage() {
   }, [weeks])
 
   useEffect(() => { load() }, [load])
+  useRealtimeRefresh(['material_inventory_lots', 'orders', 'order_items'], load)
 
   // Pre-fill assignments when opening panel: qty = tomorrow's suggested
   function openPanel() {

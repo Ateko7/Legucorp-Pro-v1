@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import Modal from '../../../components/ui/Modal'
+import { useRealtimeRefresh } from '../../../hooks/useRealtimeRefresh'
 import {
   createPurchaseOrder,
   getMaterialsForPurchaseOrders,
@@ -90,6 +91,7 @@ export default function OrdenesCompraPage() {
   useEffect(() => {
     loadAll()
   }, [])
+  useRealtimeRefresh(['purchase_orders', 'purchase_order_items'], loadAll)
 
   async function loadAll() {
     setLoading(true)

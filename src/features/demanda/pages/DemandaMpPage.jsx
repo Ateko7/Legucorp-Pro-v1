@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
-import { getDemandaData } from '../services/demandaService'
+import { getDemandaData, getMermaByMaterial } from '../services/demandaService'
+import { useRealtimeRefresh } from '../../../hooks/useRealtimeRefresh'
 import {
   getSuppliersForPurchaseOrders,
   createPurchaseOrder,
@@ -101,12 +102,14 @@ function MaterialRow({ material }) {
 
 // ─── OC de emergencia panel ───────────────────────────────────────────────────
 
-function OCEmergenciaPanel({ deficitItems, suppliers, onClose, onDone }) {
+function OCEmergenciaPanel({ deficitItems, suppliers, mermaMap = {}, onClose, onDone }) {
   const [deliveryDate, setDeliveryDate]   = useState(todayStr)
   const [assignments, setAssignments]     = useState(() => {
     const init = {}
     deficitItems.forEach(m => {
-      init[m.material_id] = { supplierId: '', qty: Math.ceil(m.deficit) }
+      const rate = mermaMap[m.material_id] || 0
+      const adjusted = rate > 0 ? m.deficit / (1 - rate) : m.deficit
+      init[m.material_id] = { supplierId: '', qty: Math.ceil(adjusted) }
     })
     return init
   })
@@ -210,6 +213,7 @@ function OCEmergenciaPanel({ deficitItems, suppliers, onClose, onDone }) {
               <tr className="border-b border-stone-100">
                 <th className="py-2 text-left text-xs font-semibold uppercase tracking-wider text-stone-400">Material</th>
                 <th className="px-3 py-2 text-center text-xs font-semibold uppercase tracking-wider text-red-400">Déficit</th>
+                <th className="px-3 py-2 text-center text-xs font-semibold uppercase tracking-wider text-amber-500">Merma</th>
                 <th className="px-3 py-2 text-center text-xs font-semibold uppercase tracking-wider text-stone-400">A pedir</th>
                 <th className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wider text-stone-400">Proveedor</th>
               </tr>
@@ -217,6 +221,8 @@ function OCEmergenciaPanel({ deficitItems, suppliers, onClose, onDone }) {
             <tbody className="divide-y divide-stone-50">
               {deficitItems.map(m => {
                 const a = assignments[m.material_id] || {}
+                const rate = mermaMap[m.material_id] || 0
+                const mermaQty = rate > 0 ? (m.deficit / (1 - rate)) - m.deficit : 0
                 return (
                   <tr key={m.material_id} className="hover:bg-stone-50/50">
                     <td className="py-3 pr-3">
@@ -226,6 +232,16 @@ function OCEmergenciaPanel({ deficitItems, suppliers, onClose, onDone }) {
                     <td className="px-3 py-3 text-center">
                       <span className="text-sm font-bold text-red-600">{fmt(m.deficit)}</span>
                       <span className="ml-1 text-xs text-stone-400">{m.base_unit}</span>
+                    </td>
+                    <td className="px-3 py-3 text-center">
+                      {rate > 0 ? (
+                        <div className="flex flex-col items-center leading-tight">
+                          <span className="text-xs font-semibold text-amber-600">+{fmt(mermaQty)}</span>
+                          <span className="text-[10px] text-stone-400">{(rate * 100).toFixed(1)}% merma</span>
+                        </div>
+                      ) : (
+                        <span className="text-xs text-stone-300">—</span>
+                      )}
                     </td>
                     <td className="px-3 py-3">
                       <input
@@ -305,6 +321,7 @@ function OCEmergenciaPanel({ deficitItems, suppliers, onClose, onDone }) {
 export default function DemandaMpPage() {
   const [data, setData]           = useState([])
   const [suppliers, setSuppliers] = useState([])
+  const [mermaMap, setMermaMap]   = useState({})
   const [loading, setLoading]     = useState(true)
   const [error, setError]         = useState(null)
   const [showOCPanel, setShowOCPanel] = useState(false)
@@ -312,12 +329,14 @@ export default function DemandaMpPage() {
   const load = useCallback(async () => {
     setLoading(true); setError(null)
     try {
-      const [demanda, sups] = await Promise.all([
+      const [demanda, sups, merma] = await Promise.all([
         getDemandaData(),
         getSuppliersForPurchaseOrders(),
+        getMermaByMaterial().catch(() => ({})),   // non-blocking — fallback to empty
       ])
       setData(demanda)
       setSuppliers(sups)
+      setMermaMap(merma)
     } catch (err) {
       setError(err.message || 'Error al cargar la demanda')
     } finally {
@@ -326,6 +345,7 @@ export default function DemandaMpPage() {
   }, [])
 
   useEffect(() => { load() }, [load])
+  useRealtimeRefresh(['orders', 'order_items', 'material_inventory_lots'], load)
 
   const totalMaterials = data.length
   const withDeficit    = data.filter(m => m.deficit > 0).length
@@ -417,6 +437,7 @@ export default function DemandaMpPage() {
         <OCEmergenciaPanel
           deficitItems={deficitItems}
           suppliers={suppliers}
+          mermaMap={mermaMap}
           onClose={() => setShowOCPanel(false)}
           onDone={() => { load(); setShowOCPanel(false) }}
         />

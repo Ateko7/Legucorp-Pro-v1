@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { signInWithEmail } from '../services/authService'
+import { getMyProfile, resolveHomePathForProfile, signInWithEmail } from '../services/authService'
 
 const INP = 'w-full rounded-2xl border border-stone-300 bg-stone-50 px-4 py-3 text-sm text-stone-800 outline-none transition focus:border-[#2f5d50] focus:bg-white focus:ring-4 focus:ring-[#2f5d50]/10'
 
@@ -21,7 +21,8 @@ export default function LoginPage() {
     setLoading(true)
     try {
       await signInWithEmail(form.email, form.password)
-      navigate('/')
+      const profile = await getMyProfile().catch(() => null)
+      navigate(await resolveHomePathForProfile(profile))
     } catch (err) {
       setError(err.message || 'No se pudo iniciar sesión')
     } finally {

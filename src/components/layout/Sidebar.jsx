@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { signOutUser } from '../../features/auth/services/authService'
 
@@ -175,7 +175,10 @@ export default function Sidebar({ onClose }) {
   const [open, setOpen] = useState(INITIAL_OPEN)
 
   function toggle(key) {
-    setOpen(prev => ({ ...prev, [key]: !prev[key] }))
+    setOpen(prev => {
+      const nextIsOpen = !prev[key]
+      return Object.fromEntries(sections.map(section => [section.key, section.key === key ? nextIsOpen : false]))
+    })
   }
 
   function isActive(path) {
@@ -184,6 +187,14 @@ export default function Sidebar({ onClose }) {
 
   // Auto-open the section containing the active path
   const activeSection = sections.find(s => s.items.some(i => isActive(i.path)))
+
+  useEffect(() => {
+    if (!activeSection) return
+    setOpen(prev => {
+      if (prev[activeSection.key]) return prev
+      return Object.fromEntries(sections.map(section => [section.key, section.key === activeSection.key]))
+    })
+  }, [activeSection?.key])
 
   async function handleLogout() {
     try {
@@ -239,7 +250,7 @@ export default function Sidebar({ onClose }) {
       {/* Sections */}
       <nav className="flex-1 overflow-y-auto px-3 pb-3 pt-2 space-y-1">
         {sections.map((section) => {
-          const isOpenSection = open[section.key] || activeSection?.key === section.key
+          const isOpenSection = open[section.key]
           const hasActive = section.items.some(i => isActive(i.path))
 
           return (

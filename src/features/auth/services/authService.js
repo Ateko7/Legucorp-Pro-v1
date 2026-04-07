@@ -78,6 +78,67 @@ export async function getMyProfile() {
   return data
 }
 
+export function getHomePathForProfile(profile) {
+  return profile?.role === 'operario' ? '/marcacion' : '/'
+}
+
+export async function getOperatorSetupStatus(profileParam = null) {
+  const profile = profileParam || await getMyProfile()
+
+  if (!profile || profile.role !== 'operario') {
+    return { needsSetup: false, profile, empleado: null, biometria: null }
+  }
+
+  if (!profile.empleado_id || !profile.organization_id) {
+    return { needsSetup: true, profile, empleado: null, biometria: null }
+  }
+
+  const [{ data: empleado, error: empleadoError }, { data: biometria, error: biometriaError }] = await Promise.all([
+    supabase
+      .from('empleados')
+      .select('id, organization_id, sede_id, codigo_empleado, nombres, apellidos')
+      .eq('id', profile.empleado_id)
+      .eq('organization_id', profile.organization_id)
+      .maybeSingle(),
+    supabase
+      .from('employee_biometrics')
+      .select('*')
+      .eq('organization_id', profile.organization_id)
+      .eq('empleado_id', profile.empleado_id)
+      .eq('biometric_type', 'face')
+      .eq('enrollment_status', 'active')
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle(),
+  ])
+
+  if (empleadoError) {
+    throw new Error(empleadoError.message || 'No se pudo verificar el empleado del operario')
+  }
+
+  if (biometriaError) {
+    throw new Error(biometriaError.message || 'No se pudo verificar la biometría del operario')
+  }
+
+  return {
+    needsSetup: !empleado?.sede_id || !biometria,
+    profile,
+    empleado: empleado || null,
+    biometria: biometria || null,
+  }
+}
+
+export async function resolveHomePathForProfile(profileParam = null) {
+  const profile = profileParam || await getMyProfile()
+
+  if (profile?.role === 'operario') {
+    const setup = await getOperatorSetupStatus(profile)
+    return setup.needsSetup ? '/operario-onboarding' : '/marcacion'
+  }
+
+  return '/'
+}
+
 /**
  * Espera unos milisegundos
  */
@@ -236,6 +297,89 @@ export async function registerWithInvitation({
 }
 
 /**
+ * Registra un operario con código compartido
+ */
+export async function registerOperatorWithInvitation({
+  email,
+  password,
+  fullName,
+  invitationCode,
+}) {
+  const cleanEmail = email?.trim().toLowerCase()
+  const cleanFullName = fullName?.trim()
+  const cleanInvitationCode = invitationCode?.trim().toUpperCase()
+
+  if (!cleanEmail) {
+    throw new Error('El correo es obligatorio')
+  }
+
+  if (!password) {
+    throw new Error('La contraseña es obligatoria')
+  }
+
+  if (!cleanInvitationCode) {
+    throw new Error('El código de operario es obligatorio')
+  }
+
+  let data = null
+  const { data: signUpData, error } = await supabase.auth.signUp({
+    email: cleanEmail,
+    password,
+  })
+
+  if (error) {
+    const alreadyRegistered = /already registered/i.test(error.message || '')
+
+    if (!alreadyRegistered) {
+      throw new Error(error.message || 'No se pudo crear el usuario')
+    }
+
+    const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({
+      email: cleanEmail,
+      password,
+    })
+
+    if (signInError) {
+      throw new Error(
+        'Ese correo ya existe en autenticación. Inicia sesión con esa cuenta o elimínala en Supabase Auth para volver a registrarla.'
+      )
+    }
+
+    data = signInData
+  } else {
+    data = signUpData
+  }
+
+  const session = await waitForActiveSession()
+
+  if (!session) {
+    throw new Error(
+      'El usuario fue creado en autenticación, pero no quedó una sesión activa. Revisa si la confirmación por email está activada en Supabase.'
+    )
+  }
+
+  const { data: rpcData, error: rpcError } = await supabase.rpc(
+    'complete_operator_onboarding',
+    {
+      p_invitation_code: cleanInvitationCode,
+      p_full_name: cleanFullName || null,
+    }
+  )
+
+  if (rpcError) {
+    throw new Error(
+      `Usuario creado, pero falló la vinculación del operario: ${rpcError.message}`
+    )
+  }
+
+  return {
+    auth: data,
+    onboarding: rpcData,
+    session,
+  }
+}
+
+/**
  * Reenvía email de recuperación de contraseña
  * No es crítico ahorita, pero te lo dejo listo
  */
@@ -267,3 +411,4 @@ export async function updateMyPassword(newPassword) {
 
   return data
 }
+

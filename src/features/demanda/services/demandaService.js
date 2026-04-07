@@ -17,6 +17,53 @@ function n(v) {
   return isNaN(x) ? 0 : x
 }
 
+// ─── Merma helper ─────────────────────────────────────────────────────────────
+
+/**
+ * Returns a map of material_id → avg merma rate (0–1) based on completed
+ * processing runs for this organization.
+ *
+ * merma_rate = 1 - SUM(output_original_quantity) / SUM(input_quantity)
+ * per source_material_id, only from status = 'completado' runs.
+ */
+export async function getMermaByMaterial() {
+  const orgId = await getOrgId()
+
+  const { data: runs, error } = await supabase
+    .from('material_process_runs')
+    .select('source_material_id, input_quantity, processed_inventory_lots(original_quantity)')
+    .eq('organization_id', orgId)
+    .eq('status', 'completado')
+
+  if (error) throw new Error(error.message)
+  if (!runs || runs.length === 0) return {}
+
+  // Aggregate per material
+  const agg = {}   // { [material_id]: { totalInput, totalOutput } }
+
+  for (const run of runs) {
+    const matId = run.source_material_id
+    if (!matId) continue
+    if (!agg[matId]) agg[matId] = { totalInput: 0, totalOutput: 0 }
+
+    agg[matId].totalInput += n(run.input_quantity)
+
+    for (const lot of run.processed_inventory_lots || []) {
+      agg[matId].totalOutput += n(lot.original_quantity)
+    }
+  }
+
+  // Convert to rate
+  const mermaMap = {}
+  for (const [matId, { totalInput, totalOutput }] of Object.entries(agg)) {
+    if (totalInput > 0) {
+      mermaMap[matId] = Math.max(0, Math.min(0.99, 1 - totalOutput / totalInput))
+    }
+  }
+
+  return mermaMap
+}
+
 // ─── Main service ─────────────────────────────────────────────────────────────
 
 /**

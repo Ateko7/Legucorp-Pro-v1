@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState, useCallback } from 'react'
+import { useRealtimeRefresh } from '../../../hooks/useRealtimeRefresh'
 import { useNavigate } from 'react-router-dom'
 import {
   getOrders,
@@ -23,6 +24,10 @@ import { getFacturaPorPedido, generarFactura } from '../../exportacion/services/
 const todayStr = new Date().toISOString().slice(0, 10)
 
 function n(v) { const x = Number(v); return isNaN(x) ? 0 : x }
+
+function moneyInput(v) {
+  return n(v).toFixed(2)
+}
 
 function fmt(v) {
   return n(v).toLocaleString('es-GT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
@@ -96,7 +101,7 @@ function OrderForm({ initial, clients, presentations, onSave, onCancel, saving }
         _key: i.id,
         product_presentation_id: i.product_presentation_id,
         quantity: String(i.quantity),
-        unit_price: String(i.unit_price),
+        unit_price: moneyInput(i.unit_price),
       }))
     }
     return [{ _key: Date.now(), product_presentation_id: '', quantity: '', unit_price: '' }]
@@ -119,7 +124,7 @@ function OrderForm({ initial, clients, presentations, onSave, onCancel, saving }
       // Auto-fill precio sugerido al seleccionar producto
       if (field === 'product_presentation_id') {
         const pres = presentations.find((p) => p.id === value)
-        if (pres) updated.unit_price = String(pres.suggested_price)
+        if (pres) updated.unit_price = moneyInput(pres.suggested_price)
       }
       return updated
     }))
@@ -492,21 +497,15 @@ function OrderDetailView({ orderId, inventory, onBack, onStatusChange, onEdit })
     setError('')
     try {
       await updateOrderStatus(orderId, newStatus)
-      // Al facturar: asiento contable + comisión de vendedor
-      if (newStatus === ORDER_STATUS.FACTURADO) {
-        try {
-          const { generateSalesEntry } = await import('../../contabilidad/services/contabilidadService')
-          await generateSalesEntry(orderId)
-        } catch (e) {
-          console.warn('Asiento contable no generado:', e.message)
+        // Al facturar: asiento contable
+        if (newStatus === ORDER_STATUS.FACTURADO) {
+          try {
+            const { generateSalesEntry } = await import('../../contabilidad/services/contabilidadService')
+            await generateSalesEntry(orderId)
+          } catch (e) {
+            console.warn('Asiento contable no generado:', e.message)
+          }
         }
-        try {
-          const { generateSalesCommission } = await import('../../vendedores/services/vendedoresService')
-          await generateSalesCommission(orderId)
-        } catch (e) {
-          console.warn('Comisión no generada:', e.message)
-        }
-      }
       await loadOrder()
       onStatusChange()
     } catch (err) {
@@ -1245,6 +1244,7 @@ export default function PedidosPage() {
   }
 
   useEffect(() => { loadAll() }, [])
+  useRealtimeRefresh(['orders', 'order_items'], loadAll)
 
   async function handleCreate(payload) {
     setSaving(true)

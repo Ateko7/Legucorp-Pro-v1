@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from 'react'
+import { useRealtimeRefresh } from '../../../hooks/useRealtimeRefresh'
 import Modal from '../../../components/ui/Modal'
 import {
+  createBulkReceptions,
   createReception,
   getOpenPurchaseOrders,
   getReceptionMaterials,
@@ -22,6 +24,23 @@ const emptyForm = {
   unit: '',
   quality_notes: '',
   unit_cost: '',
+  bulk_items: [],
+}
+
+function toBulkItem(item) {
+  return {
+    purchase_order_item_id: item.id,
+    material_id: item.material_id,
+    material_name: item.materials?.common_name || 'Materia prima',
+    material_code: item.materials?.code || '',
+    supplier_lot: '',
+    quantity_ordered: Number(item.quantity || 0),
+    quantity_received: String(item.quantity || ''),
+    quantity_accepted: String(item.quantity || ''),
+    unit: item.unit || item.materials?.base_unit || '',
+    unit_cost: item.unit_cost !== undefined && item.unit_cost !== null ? String(item.unit_cost) : '',
+    quality_notes: '',
+  }
 }
 
 export default function RecepcionPage() {
@@ -42,6 +61,7 @@ export default function RecepcionPage() {
   useEffect(() => {
     loadAll()
   }, [])
+  useRealtimeRefresh(['purchase_orders', 'material_inventory_lots', 'material_receptions'], loadAll)
 
   async function loadAll() {
     setLoading(true)
@@ -96,6 +116,7 @@ export default function RecepcionPage() {
         material_id: '',
         unit: '',
         unit_cost: '',
+        bulk_items: (selectedPO?.purchase_order_items || []).map(toBulkItem),
       }))
       return
     }
@@ -134,6 +155,15 @@ export default function RecepcionPage() {
     }))
   }
 
+  function handleBulkItemChange(index, field, value) {
+    setForm((prev) => ({
+      ...prev,
+      bulk_items: prev.bulk_items.map((item, itemIndex) =>
+        itemIndex === index ? { ...item, [field]: value } : item
+      ),
+    }))
+  }
+
   async function handleSubmit(e) {
     e.preventDefault()
     setSaving(true)
@@ -141,8 +171,22 @@ export default function RecepcionPage() {
     setSuccess('')
 
     try {
-      await createReception(form)
-      setSuccess('Recepción creada correctamente.')
+      if (form.purchase_order_id) {
+        const payload = {
+          purchase_order_id: form.purchase_order_id,
+          supplier_id: form.supplier_id,
+          received_date: form.received_date,
+          quality_notes: form.quality_notes,
+          items: form.bulk_items,
+        }
+
+        const created = await createBulkReceptions(payload)
+        setSuccess(`Se crearon ${created.length} recepción(es) de la orden correctamente.`)
+      } else {
+        await createReception(form)
+        setSuccess('Recepción creada correctamente.')
+      }
+
       await loadAll()
 
       setTimeout(() => {
@@ -191,10 +235,6 @@ export default function RecepcionPage() {
     return purchaseOrders.find((po) => po.id === form.purchase_order_id) || null
   }, [purchaseOrders, form.purchase_order_id])
 
-  const availablePOItems = useMemo(() => {
-    return selectedPO?.purchase_order_items || []
-  }, [selectedPO])
-
   const calculatedRejected = useMemo(() => {
     const received = Number(form.quantity_received || 0)
     const accepted = Number(form.quantity_accepted || 0)
@@ -202,10 +242,26 @@ export default function RecepcionPage() {
   }, [form.quantity_received, form.quantity_accepted])
 
   const calculatedLotCost = useMemo(() => {
-    const received = Number(form.quantity_received || 0)
+    const accepted = Number(form.quantity_accepted || 0)
     const unitCost = Number(form.unit_cost || 0)
-    return received * unitCost
-  }, [form.quantity_received, form.unit_cost])
+    return accepted * unitCost
+  }, [form.quantity_accepted, form.unit_cost])
+
+  const bulkSummary = useMemo(() => {
+    return (form.bulk_items || []).reduce(
+      (acc, item) => {
+        const received = Number(item.quantity_received || 0)
+        const accepted = Number(item.quantity_accepted || 0)
+        const cost = accepted * Number(item.unit_cost || 0)
+        acc.totalLines += 1
+        acc.totalReceived += received
+        acc.totalAccepted += accepted
+        acc.totalCost += cost
+        return acc
+      },
+      { totalLines: 0, totalReceived: 0, totalAccepted: 0, totalCost: 0 }
+    )
+  }, [form.bulk_items])
 
   const filteredReceptions = useMemo(() => {
     const term = search.trim().toLowerCase()
@@ -235,7 +291,7 @@ export default function RecepcionPage() {
           </p>
           <h1 className="text-3xl font-semibold text-stone-800">Recepción</h1>
           <p className="mt-2 text-sm text-stone-500">
-            Registra ingresos de materia prima y luego libera o rechaza el lote desde el listado.
+            Registra ingresos de materia prima, incluyendo recepción masiva de todas las líneas de una OC enviada.
           </p>
         </div>
 
@@ -312,8 +368,8 @@ export default function RecepcionPage() {
                         row.status === 'liberado'
                           ? 'bg-emerald-100 text-emerald-800'
                           : row.status === 'rechazado'
-                          ? 'bg-red-100 text-red-700'
-                          : 'bg-amber-100 text-amber-800'
+                            ? 'bg-red-100 text-red-700'
+                            : 'bg-amber-100 text-amber-800'
                       }`}
                     >
                       {row.status}
@@ -370,7 +426,7 @@ export default function RecepcionPage() {
         isOpen={showModal}
         onClose={closeModal}
         title="Nueva recepción"
-        maxWidth="max-w-5xl"
+        maxWidth="max-w-6xl"
       >
         <form onSubmit={handleSubmit} className="space-y-6">
           <section className="grid gap-4 md:grid-cols-2">
@@ -384,70 +440,10 @@ export default function RecepcionPage() {
                 <option value="">Sin orden de compra</option>
                 {purchaseOrders.map((po) => (
                   <option key={po.id} value={po.id}>
-                    {po.order_number} - {po.suppliers?.name || 'Sin proveedor'}
+                    {po.order_number} - {po.suppliers?.name || 'Sin proveedor'} ({po.purchase_order_items?.length || 0} líneas)
                   </option>
                 ))}
               </select>
-            </Field>
-
-            <Field label="Línea de orden de compra">
-              <select
-                name="purchase_order_item_id"
-                value={form.purchase_order_item_id}
-                onChange={handleChange}
-                disabled={!form.purchase_order_id}
-                className="w-full rounded-2xl border border-stone-300 bg-stone-50 px-4 py-3 text-stone-700 outline-none transition disabled:cursor-not-allowed disabled:opacity-50 focus:border-emerald-700 focus:bg-white focus:ring-4 focus:ring-emerald-100"
-              >
-                <option value="">Seleccionar línea</option>
-                {availablePOItems.map((item) => (
-                  <option key={item.id} value={item.id}>
-                    {item.materials?.common_name || 'Materia prima'} - {Number(item.quantity).toFixed(2)} {item.unit}
-                  </option>
-                ))}
-              </select>
-            </Field>
-
-            <Field label="Proveedor *">
-              <select
-                name="supplier_id"
-                value={form.supplier_id}
-                onChange={handleChange}
-                required
-                className="w-full rounded-2xl border border-stone-300 bg-stone-50 px-4 py-3 text-stone-700 outline-none transition focus:border-emerald-700 focus:bg-white focus:ring-4 focus:ring-emerald-100"
-              >
-                <option value="">Seleccionar proveedor</option>
-                {suppliers.map((supplier) => (
-                  <option key={supplier.id} value={supplier.id}>
-                    {supplier.name}
-                  </option>
-                ))}
-              </select>
-            </Field>
-
-            <Field label="Materia prima *">
-              <select
-                name="material_id"
-                value={form.material_id}
-                onChange={handleChange}
-                required
-                className="w-full rounded-2xl border border-stone-300 bg-stone-50 px-4 py-3 text-stone-700 outline-none transition focus:border-emerald-700 focus:bg-white focus:ring-4 focus:ring-emerald-100"
-              >
-                <option value="">Seleccionar materia prima</option>
-                {materials.map((material) => (
-                  <option key={material.id} value={material.id}>
-                    {material.common_name} ({material.code})
-                  </option>
-                ))}
-              </select>
-            </Field>
-
-            <Field label="Lote proveedor">
-              <input
-                name="supplier_lot"
-                value={form.supplier_lot}
-                onChange={handleChange}
-                className="w-full rounded-2xl border border-stone-300 bg-stone-50 px-4 py-3 text-stone-700 outline-none transition focus:border-emerald-700 focus:bg-white focus:ring-4 focus:ring-emerald-100"
-              />
             </Field>
 
             <Field label="Fecha de recepción *">
@@ -461,74 +457,233 @@ export default function RecepcionPage() {
               />
             </Field>
 
-            <Field label="Unidad *">
-              <input
-                name="unit"
-                value={form.unit}
+            <Field label="Proveedor *">
+              <select
+                name="supplier_id"
+                value={form.supplier_id}
                 onChange={handleChange}
                 required
-                className="w-full rounded-2xl border border-stone-300 bg-stone-50 px-4 py-3 text-stone-700 outline-none transition focus:border-emerald-700 focus:bg-white focus:ring-4 focus:ring-emerald-100"
-              />
+                disabled={!!form.purchase_order_id}
+                className="w-full rounded-2xl border border-stone-300 bg-stone-50 px-4 py-3 text-stone-700 outline-none transition disabled:cursor-not-allowed disabled:opacity-60 focus:border-emerald-700 focus:bg-white focus:ring-4 focus:ring-emerald-100"
+              >
+                <option value="">Seleccionar proveedor</option>
+                {suppliers.map((supplier) => (
+                  <option key={supplier.id} value={supplier.id}>
+                    {supplier.name}
+                  </option>
+                ))}
+              </select>
             </Field>
 
-            <Field label="Costo unitario *">
-              <input
-                name="unit_cost"
-                type="number"
-                step="0.0001"
-                value={form.unit_cost}
-                onChange={handleChange}
-                required
-                className="w-full rounded-2xl border border-stone-300 bg-stone-50 px-4 py-3 text-stone-700 outline-none transition focus:border-emerald-700 focus:bg-white focus:ring-4 focus:ring-emerald-100"
+            {!form.purchase_order_id ? (
+              <Field label="Materia prima *">
+                <select
+                  name="material_id"
+                  value={form.material_id}
+                  onChange={handleChange}
+                  required
+                  className="w-full rounded-2xl border border-stone-300 bg-stone-50 px-4 py-3 text-stone-700 outline-none transition focus:border-emerald-700 focus:bg-white focus:ring-4 focus:ring-emerald-100"
+                >
+                  <option value="">Seleccionar materia prima</option>
+                  {materials.map((material) => (
+                    <option key={material.id} value={material.id}>
+                      {material.common_name} ({material.code})
+                    </option>
+                  ))}
+                </select>
+              </Field>
+            ) : (
+              <ReadOnlyField
+                label="Proveedor de la OC"
+                value={selectedPO?.suppliers?.name || '—'}
               />
-            </Field>
-
-            <Field label="Cantidad recibida *">
-              <input
-                name="quantity_received"
-                type="number"
-                step="0.0001"
-                value={form.quantity_received}
-                onChange={handleChange}
-                required
-                className="w-full rounded-2xl border border-stone-300 bg-stone-50 px-4 py-3 text-stone-700 outline-none transition focus:border-emerald-700 focus:bg-white focus:ring-4 focus:ring-emerald-100"
-              />
-            </Field>
-
-            <Field label="Cantidad aceptada *">
-              <input
-                name="quantity_accepted"
-                type="number"
-                step="0.0001"
-                value={form.quantity_accepted}
-                onChange={handleChange}
-                required
-                className="w-full rounded-2xl border border-stone-300 bg-stone-50 px-4 py-3 text-stone-700 outline-none transition focus:border-emerald-700 focus:bg-white focus:ring-4 focus:ring-emerald-100"
-              />
-            </Field>
-
-            <ReadOnlyField
-              label="Cantidad rechazada"
-              value={`${calculatedRejected.toFixed(2)} ${form.unit || ''}`.trim()}
-            />
-
-            <ReadOnlyField
-              label="Costo total del lote"
-              value={`Q ${calculatedLotCost.toFixed(2)}`}
-            />
+            )}
           </section>
 
-          <section>
-            <Field label="Notas de calidad">
-              <textarea
-                name="quality_notes"
-                rows={4}
-                value={form.quality_notes}
-                onChange={handleChange}
-                className="w-full rounded-2xl border border-stone-300 bg-stone-50 px-4 py-3 text-stone-700 outline-none transition focus:border-emerald-700 focus:bg-white focus:ring-4 focus:ring-emerald-100"
-              />
-            </Field>
-          </section>
+          {form.purchase_order_id ? (
+            <>
+              <section className="rounded-2xl border border-stone-200 bg-stone-50 p-4">
+                <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+                  <div>
+                    <h3 className="text-lg font-semibold text-stone-800">Recepción masiva de OC</h3>
+                    <p className="text-sm text-stone-500">
+                      Captura todas las materias primas de {selectedPO?.order_number || 'la orden'} en una sola operación.
+                    </p>
+                  </div>
+                  <div className="text-sm text-stone-600">
+                    {bulkSummary.totalLines} líneas · Recibido {bulkSummary.totalReceived.toFixed(2)} · Aceptado {bulkSummary.totalAccepted.toFixed(2)} · Costo Q {bulkSummary.totalCost.toFixed(2)}
+                  </div>
+                </div>
+              </section>
+
+              <section className="space-y-3">
+                {(form.bulk_items || []).map((item, index) => {
+                  const rejected = Math.max(Number(item.quantity_received || 0) - Number(item.quantity_accepted || 0), 0)
+                  const lineCost = Number(item.quantity_accepted || 0) * Number(item.unit_cost || 0)
+
+                  return (
+                    <div key={item.purchase_order_item_id} className="rounded-2xl border border-stone-200 bg-stone-50 p-4">
+                      <div className="mb-4 flex flex-col gap-1 md:flex-row md:items-center md:justify-between">
+                        <div>
+                          <h4 className="font-semibold text-stone-800">{item.material_name}</h4>
+                          <p className="text-sm text-stone-500">{item.material_code || 'Sin código'} · Pedido {Number(item.quantity_ordered || 0).toFixed(2)} {item.unit}</p>
+                        </div>
+                        <div className="text-sm text-stone-500">Costo línea: Q {lineCost.toFixed(2)}</div>
+                      </div>
+
+                      <div className="grid gap-4 md:grid-cols-3 xl:grid-cols-6">
+                        <Field label="Lote proveedor">
+                          <input
+                            value={item.supplier_lot}
+                            onChange={(e) => handleBulkItemChange(index, 'supplier_lot', e.target.value)}
+                            className="w-full rounded-2xl border border-stone-300 bg-white px-4 py-3 text-stone-700 outline-none transition focus:border-emerald-700 focus:bg-white focus:ring-4 focus:ring-emerald-100"
+                          />
+                        </Field>
+
+                        <Field label="Cantidad recibida">
+                          <input
+                            type="number"
+                            step="0.0001"
+                            value={item.quantity_received}
+                            onChange={(e) => handleBulkItemChange(index, 'quantity_received', e.target.value)}
+                            className="w-full rounded-2xl border border-stone-300 bg-white px-4 py-3 text-stone-700 outline-none transition focus:border-emerald-700 focus:bg-white focus:ring-4 focus:ring-emerald-100"
+                          />
+                        </Field>
+
+                        <Field label="Cantidad aceptada">
+                          <input
+                            type="number"
+                            step="0.0001"
+                            value={item.quantity_accepted}
+                            onChange={(e) => handleBulkItemChange(index, 'quantity_accepted', e.target.value)}
+                            className="w-full rounded-2xl border border-stone-300 bg-white px-4 py-3 text-stone-700 outline-none transition focus:border-emerald-700 focus:bg-white focus:ring-4 focus:ring-emerald-100"
+                          />
+                        </Field>
+
+                        <ReadOnlyField label="Rechazada" value={`${rejected.toFixed(2)} ${item.unit || ''}`.trim()} />
+
+                        <Field label="Costo unitario">
+                          <input
+                            type="number"
+                            step="0.0001"
+                            value={item.unit_cost}
+                            onChange={(e) => handleBulkItemChange(index, 'unit_cost', e.target.value)}
+                            className="w-full rounded-2xl border border-stone-300 bg-white px-4 py-3 text-stone-700 outline-none transition focus:border-emerald-700 focus:bg-white focus:ring-4 focus:ring-emerald-100"
+                          />
+                        </Field>
+
+                        <ReadOnlyField label="Costo total" value={`Q ${lineCost.toFixed(2)}`} />
+                      </div>
+
+                      <div className="mt-4">
+                        <Field label="Notas de calidad de la línea">
+                          <textarea
+                            rows={3}
+                            value={item.quality_notes}
+                            onChange={(e) => handleBulkItemChange(index, 'quality_notes', e.target.value)}
+                            className="w-full rounded-2xl border border-stone-300 bg-white px-4 py-3 text-stone-700 outline-none transition focus:border-emerald-700 focus:bg-white focus:ring-4 focus:ring-emerald-100"
+                          />
+                        </Field>
+                      </div>
+                    </div>
+                  )
+                })}
+              </section>
+            </>
+          ) : (
+            <>
+              <section className="grid gap-4 md:grid-cols-2">
+                <Field label="Línea de orden de compra">
+                  <select
+                    name="purchase_order_item_id"
+                    value={form.purchase_order_item_id}
+                    onChange={handleChange}
+                    disabled
+                    className="w-full rounded-2xl border border-stone-300 bg-stone-50 px-4 py-3 text-stone-700 outline-none transition disabled:cursor-not-allowed disabled:opacity-50 focus:border-emerald-700 focus:bg-white focus:ring-4 focus:ring-emerald-100"
+                  >
+                    <option value="">Seleccionar línea</option>
+                  </select>
+                </Field>
+
+                <Field label="Lote proveedor">
+                  <input
+                    name="supplier_lot"
+                    value={form.supplier_lot}
+                    onChange={handleChange}
+                    className="w-full rounded-2xl border border-stone-300 bg-stone-50 px-4 py-3 text-stone-700 outline-none transition focus:border-emerald-700 focus:bg-white focus:ring-4 focus:ring-emerald-100"
+                  />
+                </Field>
+
+                <Field label="Unidad *">
+                  <input
+                    name="unit"
+                    value={form.unit}
+                    onChange={handleChange}
+                    required
+                    className="w-full rounded-2xl border border-stone-300 bg-stone-50 px-4 py-3 text-stone-700 outline-none transition focus:border-emerald-700 focus:bg-white focus:ring-4 focus:ring-emerald-100"
+                  />
+                </Field>
+
+                <Field label="Costo unitario *">
+                  <input
+                    name="unit_cost"
+                    type="number"
+                    step="0.0001"
+                    value={form.unit_cost}
+                    onChange={handleChange}
+                    required
+                    className="w-full rounded-2xl border border-stone-300 bg-stone-50 px-4 py-3 text-stone-700 outline-none transition focus:border-emerald-700 focus:bg-white focus:ring-4 focus:ring-emerald-100"
+                  />
+                </Field>
+
+                <Field label="Cantidad recibida *">
+                  <input
+                    name="quantity_received"
+                    type="number"
+                    step="0.0001"
+                    value={form.quantity_received}
+                    onChange={handleChange}
+                    required
+                    className="w-full rounded-2xl border border-stone-300 bg-stone-50 px-4 py-3 text-stone-700 outline-none transition focus:border-emerald-700 focus:bg-white focus:ring-4 focus:ring-emerald-100"
+                  />
+                </Field>
+
+                <Field label="Cantidad aceptada *">
+                  <input
+                    name="quantity_accepted"
+                    type="number"
+                    step="0.0001"
+                    value={form.quantity_accepted}
+                    onChange={handleChange}
+                    required
+                    className="w-full rounded-2xl border border-stone-300 bg-stone-50 px-4 py-3 text-stone-700 outline-none transition focus:border-emerald-700 focus:bg-white focus:ring-4 focus:ring-emerald-100"
+                  />
+                </Field>
+
+                <ReadOnlyField
+                  label="Cantidad rechazada"
+                  value={`${calculatedRejected.toFixed(2)} ${form.unit || ''}`.trim()}
+                />
+
+                <ReadOnlyField
+                  label="Costo total del lote"
+                  value={`Q ${calculatedLotCost.toFixed(2)}`}
+                />
+              </section>
+
+              <section>
+                <Field label="Notas de calidad">
+                  <textarea
+                    name="quality_notes"
+                    rows={4}
+                    value={form.quality_notes}
+                    onChange={handleChange}
+                    className="w-full rounded-2xl border border-stone-300 bg-stone-50 px-4 py-3 text-stone-700 outline-none transition focus:border-emerald-700 focus:bg-white focus:ring-4 focus:ring-emerald-100"
+                  />
+                </Field>
+              </section>
+            </>
+          )}
 
           <div className="rounded-2xl border border-stone-200 bg-stone-50 px-4 py-4 text-sm text-stone-600">
             El lote interno no se escribe manualmente. Se generará automáticamente al guardar.
@@ -562,7 +717,7 @@ export default function RecepcionPage() {
               disabled={saving}
               className="rounded-2xl bg-[#2f5d50] px-5 py-3 text-sm font-semibold text-white shadow-md transition hover:bg-[#264c42] disabled:opacity-60"
             >
-              {saving ? 'Guardando...' : 'Guardar recepción'}
+              {saving ? 'Guardando...' : form.purchase_order_id ? 'Guardar recepciones de OC' : 'Guardar recepción'}
             </button>
           </div>
         </form>

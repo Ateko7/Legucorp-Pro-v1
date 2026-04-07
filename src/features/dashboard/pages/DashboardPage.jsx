@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback } from 'react'
 import { getOperativoDashboard, getFinancieroDashboard, getKpiManoObra } from '../services/dashboardService'
+import { useRealtimeRefresh } from '../../../hooks/useRealtimeRefresh'
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -43,6 +44,56 @@ function MiniBarChart({ data, valueFmt }) {
           </div>
         )
       })}
+    </div>
+  )
+}
+
+function PieWasteChart({ items }) {
+  const palette = {
+    deshoje: '#60a5fa',
+    lavado: '#f59e0b',
+    secado: '#34d399',
+  }
+  const total = items.reduce((acc, item) => acc + n(item.pct), 0)
+  let cursor = 0
+  const segments = items.map(item => {
+    const share = total > 0 ? (n(item.pct) / total) * 100 : 0
+    const start = cursor
+    const end = cursor + share
+    cursor = end
+    return `${palette[item.stage] || '#a8a29e'} ${start}% ${end}%`
+  })
+  const background = total > 0
+    ? `conic-gradient(${segments.join(', ')})`
+    : 'conic-gradient(#e7e5e4 0% 100%)'
+
+  return (
+    <div className="flex flex-col gap-5 lg:flex-row lg:items-center">
+      <div className="relative mx-auto h-40 w-40 shrink-0 rounded-full lg:mx-0" style={{ background }}>
+        <div className="absolute inset-[22%] flex items-center justify-center rounded-full bg-white text-center shadow-inner">
+          <div>
+            <p className="text-[10px] font-semibold uppercase tracking-widest text-stone-400">Merma</p>
+            <p className="text-lg font-bold text-stone-900">{total > 0 ? `${fmt(total)}%` : '0.00%'}</p>
+            <p className="text-[10px] text-stone-400">por proceso</p>
+          </div>
+        </div>
+      </div>
+      <div className="flex-1 space-y-3">
+        {items.map(item => (
+          <div key={item.stage} className="rounded-2xl bg-stone-50 px-4 py-3">
+            <div className="mb-1 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: palette[item.stage] || '#a8a29e' }} />
+                <span className="text-sm font-semibold capitalize text-stone-800">{item.stage}</span>
+              </div>
+              <span className="text-sm font-bold text-stone-900">{fmt(item.pct)}%</span>
+            </div>
+            <p className="text-xs text-stone-400">
+              Entrada: {fmt(item.input)} · Salida: {fmt(item.output)} · Merma: {fmt(item.waste)}
+            </p>
+          </div>
+        ))}
+      </div>
     </div>
   )
 }
@@ -109,11 +160,12 @@ function OperativoDashboard() {
   }, [])
 
   useEffect(() => { load() }, [load])
+  useRealtimeRefresh(['orders', 'order_items', 'material_inventory_lots', 'processed_inventory_lots', 'purchase_orders', 'material_process_runs', 'material_process_stage_outputs'], load)
 
   if (loading) return <Spinner />
   if (error) return <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>
 
-  const { orders, inventory, expiringLots, topProducts, mpItems, revenueChart, processRuns, pendingPOs } = data
+  const { orders, inventory, expiringLots, topProducts, mpItems, revenueChart, processRuns, pendingPOs, mermaPorProceso } = data
   const activeOrders = (orders.byStatus.confirmado || 0) + (orders.byStatus.empacado || 0) + (orders.byStatus.despachado || 0)
   const lowStockMp   = mpItems.filter(m => m.alert)
   const inLogistica  = (orders.byStatus.en_logistica || 0) + (orders.byStatus.entregado || 0)
@@ -362,6 +414,17 @@ function OperativoDashboard() {
         </div>
       </div>
 
+      <div className="rounded-3xl border border-stone-200 bg-white p-6 shadow-sm">
+        <div className="mb-5 flex items-start justify-between">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-widest text-stone-400">Producción</p>
+            <h3 className="mt-1 text-lg font-bold text-stone-800">Merma por proceso</h3>
+          </div>
+          <span className="rounded-2xl bg-stone-100 px-3 py-1 text-xs font-semibold text-stone-600">Últimos 30 días</span>
+        </div>
+        <PieWasteChart items={mermaPorProceso} />
+      </div>
+
       {/* Top productos */}
       {topProducts.length > 0 && (
         <div className="rounded-3xl border border-stone-200 bg-white p-6 shadow-sm">
@@ -402,6 +465,7 @@ function FinancieroDashboard() {
   }, [])
 
   useEffect(() => { load() }, [load])
+  useRealtimeRefresh(['orders', 'purchase_orders', 'quotes'], load)
 
   if (loading) return <Spinner />
   if (error) return <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>

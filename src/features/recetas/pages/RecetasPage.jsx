@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import { useRealtimeRefresh } from '../../../hooks/useRealtimeRefresh'
 import Modal from '../../../components/ui/Modal'
 import {
   getAllRecipes,
@@ -30,6 +31,7 @@ export default function RecetasPage() {
   useEffect(() => {
     loadAll()
   }, [])
+  useRealtimeRefresh(['skus', 'materials', 'sku_recipes'], loadAll)
 
   async function loadAll() {
     setLoading(true)

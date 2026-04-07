@@ -1,10 +1,13 @@
 import { useEffect, useState } from 'react'
-import { Navigate } from 'react-router-dom'
+import { Navigate, useLocation } from 'react-router-dom'
 import { supabase } from '../../../lib/supabase'
+import { getHomePathForProfile, getMyProfile } from '../services/authService'
 
-export default function RequireAuth({ children }) {
+export default function RequireAuth({ children, allowedRoles = null, blockedRoles = null, redirectTo = null }) {
+  const location = useLocation()
   const [loading, setLoading] = useState(true)
   const [session, setSession] = useState(null)
+  const [profile, setProfile] = useState(null)
 
   useEffect(() => {
     let mounted = true
@@ -13,6 +16,13 @@ export default function RequireAuth({ children }) {
       const { data } = await supabase.auth.getSession()
       if (!mounted) return
       setSession(data.session)
+      if (data.session?.user) {
+        const myProfile = await getMyProfile().catch(() => null)
+        if (!mounted) return
+        setProfile(myProfile)
+      } else {
+        setProfile(null)
+      }
       setLoading(false)
     }
 
@@ -22,7 +32,23 @@ export default function RequireAuth({ children }) {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((_event, newSession) => {
       setSession(newSession)
-      setLoading(false)
+      if (!newSession?.user) {
+        setProfile(null)
+        setLoading(false)
+        return
+      }
+
+      getMyProfile()
+        .then((myProfile) => {
+          if (!mounted) return
+          setProfile(myProfile)
+          setLoading(false)
+        })
+        .catch(() => {
+          if (!mounted) return
+          setProfile(null)
+          setLoading(false)
+        })
     })
 
     return () => {
@@ -37,6 +63,14 @@ export default function RequireAuth({ children }) {
 
   if (!session) {
     return <Navigate to="/login" replace />
+  }
+
+  const role = profile?.role || null
+  const isBlocked = Array.isArray(blockedRoles) && role && blockedRoles.includes(role)
+  const isAllowed = !Array.isArray(allowedRoles) || !role || allowedRoles.includes(role)
+
+  if (isBlocked || !isAllowed) {
+    return <Navigate to={redirectTo || getHomePathForProfile(profile)} replace state={{ from: location }} />
   }
 
   return children

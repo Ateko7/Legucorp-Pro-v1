@@ -5,7 +5,7 @@ import { supabase } from '../../../lib/supabase'
 export async function getProfile() {
   const { data: { user } } = await supabase.auth.getUser()
   const { data, error } = await supabase
-    .from('profiles').select('id, organization_id').eq('id', user.id).single()
+    .from('profiles').select('id, organization_id, role, empleado_id, full_name').eq('id', user.id).single()
   if (error) throw new Error(error.message)
   return data
 }

@@ -1,4 +1,5 @@
 import { useEffect, useState, useCallback, useMemo } from 'react'
+import { useRealtimeRefresh } from '../../../hooks/useRealtimeRefresh'
 import {
   getQuotes, getQuoteById, createQuote, updateQuote,
   updateQuoteStatus, deleteQuote, acceptQuote,
@@ -197,6 +198,7 @@ function ListView({ onNew, onEdit, onView, onRefresh }) {
   }, [filter, search])
 
   useEffect(() => { load() }, [load])
+  useRealtimeRefresh(['quotes', 'clients'], load)
 
   async function handleStatusChange(id, status) {
     try { await updateQuoteStatus(id, status); load() }

@@ -2,6 +2,7 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import Layout from './components/layout/Layout'
 import RequireAuth from './features/auth/components/RequireAuth'
 import LoginPage from './features/auth/pages/LoginPage'
+import OperatorSetupPage from './features/auth/pages/OperatorSetupPage'
 import RegisterPage from './features/auth/pages/RegisterPage'
 import DashboardPage from './features/dashboard/pages/DashboardPage'
 import ProductBasesPage from './features/productBases/pages/productBasesPage'
@@ -38,7 +39,7 @@ import ConfiguracionPage from './features/configuracion/pages/ConfiguracionPage'
 
 function wrap(element) {
   return (
-    <RequireAuth>
+    <RequireAuth blockedRoles={['operario']} redirectTo="/marcacion">
       <Layout>{element}</Layout>
     </RequireAuth>
   )
@@ -55,6 +56,7 @@ export default function App() {
       <Routes>
         <Route path="/login" element={<LoginPage />} />
         <Route path="/registro" element={<RegisterPage />} />
+        <Route path="/operario-onboarding" element={wrapKiosk(<OperatorSetupPage />)} />
 
         <Route path="/" element={wrap(<DashboardPage />)} />
         <Route path="/clientes" element={wrap(<ClientsPage />)} />

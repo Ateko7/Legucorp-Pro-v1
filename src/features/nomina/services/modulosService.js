@@ -336,8 +336,31 @@ export async function getPagosNomina(periodoId = null) {
   return data || []
 }
 
-export async function generarLotePago(periodoId, { fecha_pago, banco_origen, cuenta_origen, observaciones }) {
+export async function generarLotePago(periodoId, { fecha_pago, bank_account_id, banco_origen, cuenta_origen, observaciones }) {
   const profile = await getProfile()
+
+  let bancoOrigen = banco_origen || null
+  let cuentaOrigen = cuenta_origen || null
+
+  if (bank_account_id) {
+    const { data: bankAccount, error: bankError } = await supabase
+      .from('bank_accounts')
+      .select('id, bank_name, account_number')
+      .eq('organization_id', profile.organization_id)
+      .eq('id', bank_account_id)
+      .eq('is_active', true)
+      .single()
+
+    if (bankError) throw new Error(bankError.message)
+    if (!bankAccount) throw new Error('Debes seleccionar una cuenta bancaria válida')
+
+    bancoOrigen = bankAccount.bank_name || null
+    cuentaOrigen = bankAccount.account_number || null
+  }
+
+  if (!bancoOrigen || !cuentaOrigen) {
+    throw new Error('Debes seleccionar una cuenta bancaria de origen')
+  }
 
   const { data: detalles } = await supabase
     .from('nomina_detalle')
@@ -353,8 +376,8 @@ export async function generarLotePago(periodoId, { fecha_pago, banco_origen, cue
     organization_id: profile.organization_id,
     periodo_id:      periodoId,
     fecha_pago,
-    banco_origen:    banco_origen || null,
-    cuenta_origen:   cuenta_origen || null,
+    banco_origen:    bancoOrigen,
+    cuenta_origen:   cuentaOrigen,
     monto_total,
     estado:          'preparado',
     observaciones:   observaciones || null,

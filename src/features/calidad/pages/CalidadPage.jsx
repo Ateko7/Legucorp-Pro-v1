@@ -1,4 +1,5 @@
 import { useEffect, useState, useCallback } from 'react'
+import { useRealtimeRefresh } from '../../../hooks/useRealtimeRefresh'
 import {
   getConfiguracion, saveConfiguracion,
   getInspecciones, completarInspeccion, cancelarInspeccion, liberarLote,
@@ -76,6 +77,11 @@ function RiskBar({ value }) {
       </span>
     </div>
   )
+}
+
+function getRiskItemName(item) {
+  const product = item?.sku || item?.product_presentations
+  return product?.display_name || product?.product_name || product?.name || product?.code || item?.product_presentation_id || item?.id
 }
 
 // ─── Modal: Completar Inspección ──────────────────────────────────────────────
@@ -259,7 +265,7 @@ function MuestreoManualModal({ skusHoy, onClose, onSave }) {
   const [saving, setSaving] = useState(false)
   const [error,  setError]  = useState('')
 
-  const skuSeleccionado = skusHoy.find(s => s.product_presentation_id === skuId)
+  const skuSeleccionado = skusHoy.find(s => s.product_name === skuId)
   const lotes           = skuSeleccionado?.lotes || []
 
   async function handleSave() {
@@ -452,7 +458,7 @@ function TabDashboard({ onTabChange }) {
                 <div key={r.product_presentation_id || r.id}>
                   <div className="flex items-center justify-between mb-1">
                     <div>
-                      <span className="text-sm font-semibold text-stone-800">{r.product_presentations?.code}</span>
+                      <span className="text-sm font-semibold text-stone-800">{getRiskItemName(r)}</span>
                       {r.ultimo_resultado && (
                         <Badge label={RESULTADO_LABEL[r.ultimo_resultado] || r.ultimo_resultado}
                           color={RESULTADO_COLOR[r.ultimo_resultado] || 'bg-stone-100 text-stone-600'} />
@@ -491,7 +497,7 @@ function TabDashboard({ onTabChange }) {
                   <span className="w-4 shrink-0 text-xs font-bold text-stone-400">{idx + 1}</span>
                   <div className="flex-1">
                     <div className="flex justify-between mb-0.5">
-                      <span className="text-sm font-medium text-stone-800">{r.product_presentations?.code}</span>
+                      <span className="text-sm font-medium text-stone-800">{getRiskItemName(r)}</span>
                       {r.seleccionado && (
                         <span className="rounded-full bg-[#2f5d50]/10 px-2 py-0.5 text-xs font-semibold text-[#2f5d50]">seleccionado</span>
                       )}
@@ -584,6 +590,7 @@ function TabMuestreos() {
   }, [hoy])
 
   useEffect(() => { load() }, [load])
+  useRealtimeRefresh(['inspecciones_calidad', 'finished_inventory_lots'], load)
 
   async function handleEjecutar() {
     setRunning(true); setError(''); setResultado(null)
@@ -668,13 +675,12 @@ function TabMuestreos() {
           ) : (
             <div className="space-y-3">
               {ranking.slice(0, 12).map((r, idx) => {
-                const sku = r.sku || r.product_presentations
                 return (
                   <div key={r.product_presentation_id || r.id} className="flex items-center gap-3">
                     <span className="w-5 shrink-0 text-xs font-bold text-stone-400">{idx + 1}</span>
                     <div className="flex-1">
                       <div className="flex items-center justify-between mb-1">
-                        <span className="text-sm font-semibold text-stone-800">{sku?.code}</span>
+                        <span className="text-sm font-semibold text-stone-800">{getRiskItemName(r)}</span>
                         <div className="flex items-center gap-2">
                           {r.ultimo_resultado && (
                             <Badge label={RESULTADO_LABEL[r.ultimo_resultado] || r.ultimo_resultado}
@@ -744,7 +750,9 @@ function TabMuestreos() {
             {completadas.map(i => (
               <div key={i.id} className="flex items-center justify-between rounded-2xl bg-stone-50 px-5 py-3">
                 <div>
-                  <p className="text-sm font-semibold text-stone-800">{i.product_presentations?.code}</p>
+                  <p className="text-sm font-semibold text-stone-800">
+                    {i.product_presentations?.display_name || i.product_presentations?.code}
+                  </p>
                   <p className="text-xs text-stone-400">
                     {i.unidades_inspeccionadas} unds · {fmt2(i.tasa_defectos ?? 0)}% defectos
                     {i.observaciones ? ` · ${i.observaciones.slice(0, 60)}` : ''}
@@ -810,6 +818,7 @@ function TabInspecciones() {
   }, [filtros])
 
   useEffect(() => { load() }, [load])
+  useRealtimeRefresh(['inspecciones_calidad', 'finished_inventory_lots'], load)
 
   async function handleCompletar(id, data) {
     await completarInspeccion(id, data)

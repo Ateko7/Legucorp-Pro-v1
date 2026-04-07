@@ -1,5 +1,9 @@
 import { useEffect, useRef, useState, useCallback } from 'react'
-import { getEmpleados } from '../../nomina/services/empleadosService'
+import { useRealtimeRefresh } from '../../../hooks/useRealtimeRefresh'
+import { useNavigate } from 'react-router-dom'
+import { getMyProfile, getOperatorSetupStatus } from '../../auth/services/authService'
+import { getEmpleado, getEmpleados } from '../../nomina/services/empleadosService'
+import { getBiometriaFacialEmpleado } from '../../nomina/services/biometriaFacialService'
 import { getMarcacionHoy, registrarMarcacionConFoto, subirFotoMarcacion } from '../../nomina/services/marcacionesService'
 import { obtenerUbicacion, validarDistancia } from '../../nomina/services/sedesService'
 
@@ -15,7 +19,20 @@ function dataURLtoBlob(dataurl) {
   return new Blob([u8], { type: mime })
 }
 
+function isBirthdayToday(fechaNacimiento) {
+  if (!fechaNacimiento) return false
+  const today = new Date()
+  const isoToday = new Date(today.getTime() - today.getTimezoneOffset() * 60000).toISOString().slice(5, 10)
+  return String(fechaNacimiento).slice(5, 10) === isoToday
+}
+
 const PASO_COLOR = { valido: 'text-emerald-600', invalido: 'text-red-600', cargando: 'text-amber-500' }
+
+function siguienteTipoMarcacion(marcacion) {
+  if (!marcacion?.hora_entrada) return 'entrada'
+  if (!marcacion?.hora_salida) return 'salida'
+  return null
+}
 
 // ─── Componentes pequeños ─────────────────────────────────────────────────────
 
@@ -43,9 +60,47 @@ function Badge({ text, color }) {
   )
 }
 
+function BirthdayRain({ show }) {
+  if (!show) return null
+
+  const emojis = ['🎉', '🎊', '🥳', '🎂', '🎈', '✨', '🎉', '🎊', '🥳', '🎂', '🎈', '✨']
+
+  return (
+    <>
+      <style>{`
+        @keyframes birthday-fall {
+          0% { transform: translate3d(0, -10vh, 0) rotate(0deg); opacity: 0; }
+          10% { opacity: 1; }
+          100% { transform: translate3d(0, 110vh, 0) rotate(360deg); opacity: 0; }
+        }
+      `}</style>
+      <div className="pointer-events-none fixed inset-0 z-[70] overflow-hidden">
+        {emojis.map((emoji, idx) => (
+          <span
+            key={`${emoji}-${idx}`}
+            className="absolute top-[-10vh] text-3xl md:text-4xl"
+            style={{
+              left: `${6 + idx * 7.5}%`,
+              animationName: 'birthday-fall',
+              animationDuration: `${3.4 + (idx % 4) * 0.45}s`,
+              animationDelay: `${(idx % 6) * 0.18}s`,
+              animationIterationCount: 1,
+              animationTimingFunction: 'linear',
+            }}
+          >
+            {emoji}
+          </span>
+        ))}
+      </div>
+    </>
+  )
+}
+
 // ─── PÁGINA PRINCIPAL ─────────────────────────────────────────────────────────
 
 export default function MarcacionPage() {
+  const navigate = useNavigate()
+
   // Operarios
   const [operarios, setOperarios]   = useState([])
   const [search, setSearch]         = useState('')
@@ -77,18 +132,32 @@ export default function MarcacionPage() {
   const [msgOk, setMsgOk]   = useState('')
   const [error, setError]   = useState('')
   const [busy, setBusy]     = useState(false)
+  const [showBirthdayRain, setShowBirthdayRain] = useState(false)
+  const [biometria, setBiometria] = useState(null)
+  const [biometriaLoading, setBiometriaLoading] = useState(false)
+  const [authProfile, setAuthProfile] = useState(null)
+  const [profileLoading, setProfileLoading] = useState(true)
 
   // ─── Cargar operarios ────────────────────────────────────────────────────
   const cargarOperarios = useCallback(async () => {
+    if (authProfile?.role === 'operario') {
+      setOperarios([])
+      setLoadingOps(false)
+      return
+    }
+
     setLoadingOps(true)
     try {
       const data = await getEmpleados({ tipo: 'operario', estado: 'activo' })
       setOperarios(data)
     } catch {}
     finally { setLoadingOps(false) }
-  }, [])
+  }, [authProfile?.role])
 
-  useEffect(() => { cargarOperarios() }, [cargarOperarios])
+  useEffect(() => {
+    if (!profileLoading) cargarOperarios()
+  }, [cargarOperarios, profileLoading])
+  useRealtimeRefresh(['employees', 'marcaciones'], cargarOperarios)
 
   // ─── Seleccionar empleado ─────────────────────────────────────────────────
   async function seleccionar(emp) {
@@ -96,17 +165,32 @@ export default function MarcacionPage() {
     setSearch('')
     setGeoData(null); setGeoError(''); setFotoDataUrl(null); setFotoBlob(null)
     setError(''); setMsgOk(''); setPaso('inicio')
+    setShowBirthdayRain(false)
+    setBiometria(null)
+    setBiometriaLoading(true)
 
-    const marc = await getMarcacionHoy(emp.id).catch(() => null)
+    const [marc, bio] = await Promise.all([
+      getMarcacionHoy(emp.id).catch(() => null),
+      getBiometriaFacialEmpleado(emp.id).catch(() => null),
+    ])
     setMarcHoy(marc)
-    setTipoMarc(!marc?.hora_entrada ? 'entrada' : !marc?.hora_salida ? 'salida' : null)
+    setBiometria(bio)
+    setBiometriaLoading(false)
+    setTipoMarc(siguienteTipoMarcacion(marc))
   }
 
   function resetear() {
     detenerCamara()
-    setSelected(null); setMarcHoy(null); setTipoMarc('entrada')
+    if (authProfile?.role === 'operario') {
+      setTipoMarc(siguienteTipoMarcacion(marcHoy))
+    } else {
+      setSelected(null); setMarcHoy(null); setTipoMarc('entrada')
+    }
     setGeoData(null); setGeoError(''); setFotoDataUrl(null); setFotoBlob(null)
     setError(''); setMsgOk(''); setPaso('inicio')
+    setShowBirthdayRain(false)
+    setBiometria(null)
+    setBiometriaLoading(false)
   }
 
   // ─── Geolocalización ─────────────────────────────────────────────────────
@@ -198,9 +282,15 @@ export default function MarcacionPage() {
       })
       const marc = await getMarcacionHoy(selected.id).catch(() => null)
       setMarcHoy(marc)
+      setTipoMarc(siguienteTipoMarcacion(marc))
+      const birthdayEntry = tipoMarc === 'entrada' && isBirthdayToday(selected?.fecha_nacimiento)
       setMsgOk(tipoMarc === 'entrada'
         ? `✓ Entrada registrada a las ${new Date().toTimeString().slice(0,5)}`
         : `✓ Salida registrada a las ${new Date().toTimeString().slice(0,5)}`)
+      setShowBirthdayRain(birthdayEntry)
+      if (birthdayEntry) {
+        setTimeout(() => setShowBirthdayRain(false), 5000)
+      }
       setPaso('ok')
     } catch (e) {
       setError(e.message)
@@ -212,23 +302,77 @@ export default function MarcacionPage() {
   // ─── Cleanup al salir ─────────────────────────────────────────────────────
   useEffect(() => () => detenerCamara(), [])
 
+  useEffect(() => {
+    let active = true
+
+    async function loadProfileContext() {
+      try {
+        const profile = await getMyProfile().catch(() => null)
+        if (!active) return
+        setAuthProfile(profile)
+
+        if (profile?.role === 'operario') {
+          const setup = await getOperatorSetupStatus(profile).catch(() => null)
+          if (!active) return
+
+          if (setup?.needsSetup) {
+            navigate('/operario-onboarding', { replace: true })
+            return
+          }
+
+          if (!profile.empleado_id) {
+            setError('Tu usuario operario no está vinculado a un empleado. Contacta a RRHH.')
+            setLoadingOps(false)
+            return
+          }
+
+          const emp = await getEmpleado(profile.empleado_id).catch(() => null)
+          if (!active) return
+
+          if (!emp) {
+            setError('No se encontró el empleado vinculado a tu usuario.')
+            setLoadingOps(false)
+            return
+          }
+
+          await seleccionar(emp)
+        }
+      } finally {
+        if (active) setProfileLoading(false)
+      }
+    }
+
+    loadProfileContext()
+    return () => { active = false }
+  }, [])
+
   // ─── Filtro de búsqueda ───────────────────────────────────────────────────
   const filtrados = operarios.filter(e =>
     !search || `${e.nombres} ${e.apellidos} ${e.codigo_empleado}`.toLowerCase().includes(search.toLowerCase())
   )
+  const operarioAutenticado = authProfile?.role === 'operario'
 
   // ─── RENDER ───────────────────────────────────────────────────────────────
   return (
     <div className="min-h-screen bg-[#2f5d50]">
+      <BirthdayRain show={showBirthdayRain} />
 
       {/* Header */}
       <div className="sticky top-0 z-10 flex items-center justify-between bg-[#264d42] px-6 py-3 shadow-lg">
-        <div>
-          <p className="text-xs font-semibold uppercase tracking-widest text-emerald-300">LegucorpPro</p>
-          <p className="text-lg font-bold text-white">Marcación de Operarios</p>
+        <div className="flex items-center gap-3">
+          <button
+            onClick={() => navigate(-1)}
+            className="rounded-2xl border border-white/30 px-4 py-2 text-sm font-semibold text-white/90 hover:bg-white/10"
+          >
+            ← Regresar
+          </button>
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-widest text-emerald-300">LegucorpPro</p>
+            <p className="text-lg font-bold text-white">Marcación de Operarios</p>
+          </div>
         </div>
         <Reloj />
-        {selected && (
+        {selected && !operarioAutenticado && (
           <button onClick={resetear} className="rounded-2xl border border-white/30 px-4 py-2 text-sm font-semibold text-white/90 hover:bg-white/10">
             ← Cambiar
           </button>
@@ -238,7 +382,7 @@ export default function MarcacionPage() {
       <div className="mx-auto max-w-2xl px-4 py-8 space-y-6">
 
         {/* ── Selección de operario ─────────────────────────────────── */}
-        {!selected && (
+        {!selected && !operarioAutenticado && (
           <div className="space-y-4">
             <div className="rounded-3xl bg-white/10 px-5 py-4">
               <p className="mb-3 text-sm font-semibold uppercase tracking-wide text-white/70">
@@ -293,6 +437,12 @@ export default function MarcacionPage() {
         )}
 
         {/* ── Empleado seleccionado ─────────────────────────────────── */}
+        {!selected && operarioAutenticado && (
+          <div className="space-y-3 rounded-3xl bg-white/10 px-5 py-8 text-center text-white/80">
+            {profileLoading ? 'Cargando tu perfil de marcación...' : 'Preparando tu sesión de marcación...'}
+          </div>
+        )}
+
         {selected && (
           <div className="space-y-5">
 
@@ -311,6 +461,16 @@ export default function MarcacionPage() {
                     <p className="mt-0.5">Radio: {selected.sedes_trabajo.radio_metros}m</p>
                   )}
                 </div>
+              </div>
+
+              <div className="mt-4 flex flex-wrap gap-2">
+                {biometriaLoading ? (
+                  <Badge text="Verificando biometría..." color="bg-stone-100 text-stone-600" />
+                ) : biometria?.enrollment_status === 'active' ? (
+                  <Badge text="Biometría facial activa" color="bg-emerald-100 text-emerald-700" />
+                ) : (
+                  <Badge text="Sin biometría facial enrolada" color="bg-amber-100 text-amber-700" />
+                )}
               </div>
 
               {/* Estado de marcación hoy */}
@@ -526,6 +686,11 @@ export default function MarcacionPage() {
               <div className="rounded-3xl bg-white px-6 py-10 text-center shadow-xl space-y-4">
                 <p className="text-6xl">✅</p>
                 <p className="text-2xl font-black text-emerald-700">{msgOk}</p>
+                {tipoMarc === 'entrada' && isBirthdayToday(selected?.fecha_nacimiento) && (
+                  <div className="rounded-3xl border border-amber-200 bg-gradient-to-r from-amber-50 via-orange-50 to-pink-50 px-5 py-4">
+                    <p className="text-lg font-black text-amber-700">El equipo Legucorp te desea un feliz cumpleaños!</p>
+                  </div>
+                )}
                 <p className="text-sm text-stone-500">
                   {selected.nombres} {selected.apellidos}
                 </p>
@@ -545,7 +710,7 @@ export default function MarcacionPage() {
                     onClick={resetear}
                     className="w-full rounded-3xl bg-[#2f5d50] py-4 text-base font-bold text-white hover:bg-[#264d42]"
                   >
-                    Listo — Siguiente operario
+                    {operarioAutenticado ? 'Listo' : 'Listo — Siguiente operario'}
                   </button>
                 </div>
               </div>

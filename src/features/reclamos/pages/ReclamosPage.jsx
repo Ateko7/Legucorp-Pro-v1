@@ -1,4 +1,5 @@
 import { useEffect, useState, useCallback } from 'react'
+import { useRealtimeRefresh } from '../../../hooks/useRealtimeRefresh'
 import {
   getClaimsData,
   createClaim,
@@ -318,6 +319,7 @@ export default function ReclamosPage() {
   }, [])
 
   useEffect(() => { loadData() }, [loadData])
+  useRealtimeRefresh(['claims', 'orders'], loadData)
 
   async function handleDeleteClaim() {
     if (!deleteTarget) return

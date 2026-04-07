@@ -5,6 +5,7 @@ import {
   updatePackagingInventoryLocation,
   updateMaterialMinimumStock,
 } from '../services/packagingInventoryService'
+import { useRealtimeRefresh } from '../../../hooks/useRealtimeRefresh'
 
 export default function InventarioEmpaquePage() {
   const [lots, setLots] = useState([])
@@ -24,6 +25,7 @@ export default function InventarioEmpaquePage() {
   useEffect(() => {
     loadLots()
   }, [])
+  useRealtimeRefresh(['material_inventory_lots', 'materials'], loadLots)
 
   async function loadLots() {
     setLoading(true)

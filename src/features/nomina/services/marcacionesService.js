@@ -23,44 +23,186 @@ export async function subirFotoMarcacion(blob, empleadoId, tipo) {
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-/** Día de la semana (0=Dom, 1=Lun…6=Sáb) de una cadena 'YYYY-MM-DD' sin TZ. */
-function dowFromIso(iso) {
-  const [y, m, d] = iso.split('-').map(Number)
-  return new Date(y, m - 1, d).getDay()
+function isoDateLocal(date) {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
 }
 
-/** Horas entre dos strings 'HH:MM' o 'HH:MM:SS'. Devuelve null si alguno falta. */
+function getRangoQuincena(fechaIso) {
+  const [year, month, day] = fechaIso.split('-').map(Number)
+  const ultimoDia = new Date(year, month, 0).getDate()
+  if (day <= 15) {
+    return {
+      fechaInicio: `${year}-${String(month).padStart(2, '0')}-01`,
+      fechaFin: `${year}-${String(month).padStart(2, '0')}-15`,
+    }
+  }
+  return {
+    fechaInicio: `${year}-${String(month).padStart(2, '0')}-16`,
+    fechaFin: `${year}-${String(month).padStart(2, '0')}-${String(ultimoDia).padStart(2, '0')}`,
+  }
+}
+
+function dowFromIso(iso) {
+  const [year, month, day] = iso.split('-').map(Number)
+  return new Date(year, month - 1, day).getDay()
+}
+
 export function calcularHorasDia(horaEntrada, horaSalida) {
   if (!horaEntrada || !horaSalida) return null
   const [hE, mE] = horaEntrada.split(':').map(Number)
   const [hS, mS] = horaSalida.split(':').map(Number)
   const mins = (hS * 60 + mS) - (hE * 60 + mE)
-  return mins > 0 ? Math.round(mins * 100) / 6000 : 0   // → horas con 2 dec
+  return mins > 0 ? Math.round(mins * 100) / 6000 : 0
 }
 
-/** Horas teóricas para un día según jornada. */
-export function horasTeóricasDia(iso, jornada) {
+export function horasTeoricasDia(iso, jornada) {
+  const j = jornada || JORNADA_DEFAULT
   const dow = dowFromIso(iso)
-  if (dow >= 1 && dow <= 5) return jornada.lunes_viernes_horas ?? 9
-  if (dow === 6) return jornada.sabado_horas ?? 4
-  return jornada.domingo_laboral ? (jornada.domingo_horas ?? 0) : 0
+  if (dow >= 1 && dow <= 5) return j.lunes_viernes_horas ?? 9
+  if (dow === 6) return j.sabado_horas ?? 4
+  return j.domingo_laboral ? (j.domingo_horas ?? 0) : 0
 }
 
-/** Días y horas teóricas de un rango de fechas según jornada. */
+const horasTeóricasDia = horasTeoricasDia
+
 export function calcularHorasTeoricas(fechaInicio, fechaFin, jornada) {
-  const j = jornada || { lunes_viernes_horas: 9, sabado_horas: 4, domingo_laboral: false, domingo_horas: 0 }
-  let diasNormales = 0, sabados = 0, domingos = 0, horasTeoricas = 0
+  const j = jornada || JORNADA_DEFAULT
+  let diasNormales = 0
+  let sabados = 0
+  let domingos = 0
+  let horasTeoricas = 0
+
   const [y0, m0, d0] = fechaInicio.split('-').map(Number)
   const [y1, m1, d1] = fechaFin.split('-').map(Number)
   const start = new Date(y0, m0 - 1, d0)
-  const end   = new Date(y1, m1 - 1, d1)
+  const end = new Date(y1, m1 - 1, d1)
+
   for (const cur = new Date(start); cur <= end; cur.setDate(cur.getDate() + 1)) {
     const dow = cur.getDay()
-    if (dow >= 1 && dow <= 5) { diasNormales++; horasTeoricas += j.lunes_viernes_horas }
-    else if (dow === 6)        { sabados++;      horasTeoricas += j.sabado_horas }
-    else if (j.domingo_laboral){ domingos++;     horasTeoricas += j.domingo_horas }
+    if (dow >= 1 && dow <= 5) {
+      diasNormales += 1
+      horasTeoricas += j.lunes_viernes_horas ?? 9
+    } else if (dow === 6) {
+      sabados += 1
+      horasTeoricas += j.sabado_horas ?? 4
+    } else if (j.domingo_laboral) {
+      domingos += 1
+      horasTeoricas += j.domingo_horas ?? 0
+    }
   }
+
   return { diasNormales, sabados, domingos, horasTeoricas }
+}
+
+export function calcularHorasTeoricasQuincena(fechaIso, jornada) {
+  const { fechaInicio, fechaFin } = getRangoQuincena(fechaIso)
+  return calcularHorasTeoricas(fechaInicio, fechaFin, jornada)
+}
+
+export function enriquecerMarcacionEnVivo(marcacion, jornada, now = new Date()) {
+  if (!marcacion) return marcacion
+
+  const fechaHoy = isoDateLocal(now)
+  const horaAhora = now.toTimeString().slice(0, 8)
+  const horasTeoricasDiaCalculadas = Number(
+    marcacion.horas_normales_teoricas_dia ?? horasTeoricasDia(marcacion.fecha, jornada)
+  ) || 0
+
+  let horasTrabajadas = marcacion.horas_trabajadas != null ? Number(marcacion.horas_trabajadas) : null
+  let excesoDia = marcacion.exceso_dia != null ? Number(marcacion.exceso_dia) : 0
+  let costoHoraBase = marcacion.costo_hora_base != null ? Number(marcacion.costo_hora_base) : null
+  let costoDia = marcacion.costo_dia_preliminar != null ? Number(marcacion.costo_dia_preliminar) : null
+  let costoExtra = marcacion.costo_extra_preliminar != null ? Number(marcacion.costo_extra_preliminar) : null
+  let costoTotal = marcacion.costo_total_preliminar_dia != null ? Number(marcacion.costo_total_preliminar_dia) : null
+
+  const enVivo = Boolean(marcacion.hora_entrada && !marcacion.hora_salida && marcacion.fecha === fechaHoy)
+
+  if (enVivo) {
+    horasTrabajadas = calcularHorasDia(marcacion.hora_entrada, horaAhora)
+    excesoDia = Math.max(0, Number(horasTrabajadas || 0) - horasTeoricasDiaCalculadas)
+
+    const salarioMensual = Number(
+      marcacion.empleados?.salario_base_actual ??
+      marcacion.salario_base_actual ??
+      0
+    )
+    const horasTeoricasQuincena = Number(
+      calcularHorasTeoricasQuincena(marcacion.fecha, jornada).horasTeoricas || 0
+    )
+
+    if (salarioMensual > 0 && horasTeoricasQuincena > 0) {
+      costoHoraBase = Math.round((((salarioMensual / 2) / horasTeoricasQuincena) || 0) * 10000) / 10000
+      const horasNormales = Math.min(Number(horasTrabajadas || 0), horasTeoricasDiaCalculadas)
+      costoDia = Math.round(horasNormales * costoHoraBase * 100) / 100
+      costoExtra = Math.round(excesoDia * costoHoraBase * 1.5 * 100) / 100
+      costoTotal = Math.round((costoDia + costoExtra) * 100) / 100
+    }
+  }
+
+  return {
+    ...marcacion,
+    horas_normales_teoricas_dia: horasTeoricasDiaCalculadas,
+    horas_trabajadas: horasTrabajadas,
+    exceso_dia: excesoDia,
+    costo_hora_base: costoHoraBase,
+    costo_dia_preliminar: costoDia,
+    costo_extra_preliminar: costoExtra,
+    costo_total_preliminar_dia: costoTotal,
+    en_vivo: enVivo,
+  }
+}
+
+export async function enriquecerMarcacionesEnVivo(marcaciones = []) {
+  const jornada = await getJornada()
+  return (marcaciones || []).map(m => enriquecerMarcacionEnVivo(m, jornada))
+}
+
+export async function getCostoLaboralDiaEnVivo(fecha, orgId = null) {
+  const profile = await getProfile()
+  const organizationId = orgId || profile.organization_id
+  const { data, error } = await supabase
+    .from('marcaciones')
+    .select(`
+      empleado_id,
+      fecha,
+      hora_entrada,
+      hora_salida,
+      horas_trabajadas,
+      horas_normales_teoricas_dia,
+      exceso_dia,
+      costo_hora_base,
+      costo_dia_preliminar,
+      costo_extra_preliminar,
+      costo_total_preliminar_dia,
+      estado,
+      empleados(id, salario_base_actual)
+    `)
+    .eq('organization_id', organizationId)
+    .eq('fecha', fecha)
+  if (error) throw new Error(error.message)
+
+  const enriquecidas = await enriquecerMarcacionesEnVivo(data || [])
+  const empleadosMarcados = new Set()
+  let totalHoras = 0
+  let totalExtras = 0
+  let totalCosto = 0
+  let sinSalida = 0
+
+  for (const marcacion of enriquecidas) {
+    if (marcacion.hora_entrada) empleadosMarcados.add(marcacion.empleado_id)
+    totalHoras += Number(marcacion.horas_trabajadas || 0)
+    totalExtras += Number(marcacion.exceso_dia || 0)
+    totalCosto += Number(marcacion.costo_total_preliminar_dia || 0)
+    if (marcacion.hora_entrada && !marcacion.hora_salida) sinSalida += 1
+  }
+
+  return {
+    costo_laboral_total: Math.round(totalCosto * 100) / 100,
+    total_horas_trabajadas: Math.round(totalHoras * 100) / 100,
+    total_horas_extra: Math.round(totalExtras * 100) / 100,
+    total_colaboradores: empleadosMarcados.size,
+    sin_salida: sinSalida,
+  }
 }
 
 // ─── Jornada ──────────────────────────────────────────────────────────────────
@@ -120,7 +262,7 @@ export async function getMarcaciones({ fechaInicio, fechaFin, empleadoId } = {})
   const profile = await getProfile()
   let q = supabase
     .from('marcaciones')
-    .select(`*, empleados(id, nombres, apellidos, codigo_empleado, puesto)`)
+    .select(`*, empleados(id, nombres, apellidos, codigo_empleado, puesto, salario_base_actual)`)
     .eq('organization_id', profile.organization_id)
     .order('fecha', { ascending: false })
     .order('created_at', { ascending: false })
@@ -129,7 +271,7 @@ export async function getMarcaciones({ fechaInicio, fechaFin, empleadoId } = {})
   if (empleadoId)  q = q.eq('empleado_id', empleadoId)
   const { data, error } = await q
   if (error) throw new Error(error.message)
-  return data || []
+  return enriquecerMarcacionesEnVivo(data || [])
 }
 
 export async function getMarcacionHoy(empleadoId) {
@@ -289,7 +431,8 @@ export async function getResumenAsistencia(fechaInicio, fechaFin) {
   const { data, error } = await supabase
     .from('marcaciones')
     .select(`
-      empleado_id, horas_trabajadas, exceso_dia, estado, fecha,
+      empleado_id, fecha, hora_entrada, hora_salida, horas_trabajadas, horas_normales_teoricas_dia,
+      exceso_dia, costo_hora_base, costo_dia_preliminar, costo_extra_preliminar, costo_total_preliminar_dia, estado,
       empleados(id, nombres, apellidos, codigo_empleado, puesto, salario_base_actual)
     `)
     .eq('organization_id', profile.organization_id)
@@ -297,9 +440,11 @@ export async function getResumenAsistencia(fechaInicio, fechaFin) {
     .lte('fecha', fechaFin)
   if (error) throw new Error(error.message)
 
+  const marcaciones = await enriquecerMarcacionesEnVivo(data || [])
+
   // Agrupar por empleado
   const mapa = {}
-  for (const m of (data || [])) {
+  for (const m of marcaciones) {
     const eid = m.empleado_id
     if (!mapa[eid]) {
       mapa[eid] = {
@@ -307,6 +452,7 @@ export async function getResumenAsistencia(fechaInicio, fechaFin) {
         diasRegistrados: 0,
         horasTrabajadas: 0,
         horasExtra:       0,
+        costoTotal:       0,
         diasIncompletos:  0,
         diasPendientes:   0,
       }
@@ -314,6 +460,7 @@ export async function getResumenAsistencia(fechaInicio, fechaFin) {
     mapa[eid].diasRegistrados++
     mapa[eid].horasTrabajadas += Number(m.horas_trabajadas || 0)
     mapa[eid].horasExtra      += Number(m.exceso_dia || 0)
+    mapa[eid].costoTotal      += Number(m.costo_total_preliminar_dia || 0)
     if (m.estado === 'incompleta')         mapa[eid].diasIncompletos++
     if (m.estado === 'pendiente_revision') mapa[eid].diasPendientes++
   }
@@ -408,3 +555,6 @@ export async function registrarMarcacionConFoto(empleadoId, tipo, extras = {}) {
 
   return data
 }
+
+
+

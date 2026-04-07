@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import { useRealtimeRefresh } from '../../../hooks/useRealtimeRefresh'
 import Modal from '../../../components/ui/Modal'
 import { createClient, deleteClient, getClients, getSalespeopleForClients, updateClient } from '../services/clientsService'
 
@@ -45,6 +46,7 @@ export default function ClientsPage() {
   useEffect(() => {
     loadClients()
   }, [])
+  useRealtimeRefresh(['clients'], loadClients)
 
   async function loadClients() {
     setLoading(true)

@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
+import { useRealtimeRefresh } from '../../../hooks/useRealtimeRefresh'
 import {
   getSombrillas, createSombrilla, updateSombrilla, deleteSombrilla
 } from '../services/productosSombrillaService'
@@ -134,6 +135,7 @@ function TabSombrillas() {
   }, [])
 
   useEffect(() => { load() }, [load])
+  useRealtimeRefresh(['orders', 'product_umbrellas'], load)
 
   function handleSaved(s) {
     setSombrillas(prev => {
@@ -597,6 +599,7 @@ function TabFacturas() {
   }, [filtroStatus])
 
   useEffect(() => { load() }, [load])
+  useRealtimeRefresh(['orders', 'product_umbrellas'], load)
 
   function handleUpdated(updated) {
     setFacturas(prev => {

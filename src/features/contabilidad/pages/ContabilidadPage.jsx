@@ -1,9 +1,11 @@
 import { useEffect, useState, useCallback } from 'react'
+import { useRealtimeRefresh } from '../../../hooks/useRealtimeRefresh'
 import {
   initAccounting, IVA_RATE,
   getSalesLedger, getJournalEntries, getAccounts,
   getAllCostCenters, saveCostCenter, toggleCostCenterActive, getCostCenterSummary,
 } from '../services/contabilidadService'
+import BankReconciliationPanel from './BankReconciliationPanel'
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -49,6 +51,7 @@ function LibroVentas() {
   }, [dateFrom, dateTo])
 
   useEffect(() => { load() }, [load])
+  useRealtimeRefresh(['journal_entries', 'accounts'], load)
 
   const totalBase  = rows.reduce((a, r) => a + r.base, 0)
   const totalIva   = rows.reduce((a, r) => a + r.iva, 0)
@@ -212,6 +215,7 @@ function Asientos() {
   }, [dateFrom, dateTo])
 
   useEffect(() => { load() }, [load])
+  useRealtimeRefresh(['journal_entries', 'accounts'], load)
 
   const toggle = id => setExpanded(p => ({ ...p, [id]: !p[id] }))
 
@@ -585,6 +589,7 @@ export default function ContabilidadPage() {
     { key: 'asientos', label: 'Asientos contables' },
     { key: 'cuentas',  label: 'Plan de cuentas'   },
     { key: 'centros',  label: 'Centros de costo'  },
+    { key: 'conciliacion', label: 'Conciliación bancaria' },
   ]
 
   return (
@@ -617,6 +622,7 @@ export default function ContabilidadPage() {
             {tab === 'asientos' && <Asientos />}
             {tab === 'cuentas'  && <PlanCuentas />}
             {tab === 'centros'  && <CentrosCosto />}
+            {tab === 'conciliacion' && <BankReconciliationPanel />}
           </>
         )}
       </div>

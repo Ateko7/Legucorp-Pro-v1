@@ -220,6 +220,12 @@ export async function getOutputSettlementPreview(outputId) {
     .eq('id', lotId)
     .single()
 
+  const { data: supplier } = await supabase
+    .from('suppliers')
+    .select('id, name')
+    .eq('id', lot.supplier_id)
+    .maybeSingle()
+
   const originalQty = numberOrZero(lot.original_quantity)
   const finalQty = numberOrZero(output.output_quantity)
   const originalAmount = numberOrZero(lot.total_cost)
@@ -232,6 +238,9 @@ export async function getOutputSettlementPreview(outputId) {
     processWastePercentage: round2(wastePct),
     sourceInventoryLotId: lot.id,
     supplierId: lot.supplier_id,
+    supplierName: supplier?.name || null,
+    sourceInternalLot: lot.internal_lot,
+    unit: output.unit,
   }
 }
 
@@ -240,6 +249,7 @@ export async function getOutputSettlementPreview(outputId) {
 ===================================================== */
 export async function sendDriedOutputToProcessedInventory({
   outputId,
+  location,
   settlementMode,
   acceptedSupplierWastePercentage,
 }) {
@@ -278,6 +288,12 @@ export async function sendDriedOutputToProcessedInventory({
       available_quantity: preview.finalQty,
       original_quantity: preview.finalQty,
       accumulated_cost: payable,
+      location: location || null,
+      process_waste_percentage: preview.processWastePercentage,
+      accepted_supplier_waste_percentage: acceptedPct,
+      supplier_discount_amount: discount,
+      payable_amount: payable,
+      created_by: profile.id,
     })
     .select()
     .single()
@@ -287,11 +303,15 @@ export async function sendDriedOutputToProcessedInventory({
   const { error: cxpError } = await supabase.from('supplier_accounts_payable').insert({
     organization_id: profile.organization_id,
     supplier_id: preview.supplierId,
+    source_inventory_lot_id: preview.sourceInventoryLotId,
     processed_inventory_lot_id: processedLot.id,
     output_id: output.id,
+    description: `Proceso MP lote ${preview.sourceInternalLot} -> ${output.output_lot_code}`,
     original_amount: preview.originalAmount,
+    accepted_supplier_waste_percentage: acceptedPct,
     supplier_discount_amount: discount,
     payable_amount: payable,
+    status: 'pendiente_factura',
   })
 
   if (cxpError) throw new Error(`Error al crear CXP: ${cxpError.message}`)
@@ -354,25 +374,67 @@ export async function getProcesosMpDashboardData() {
 
   const { data: inventoryLots } = await supabase
     .from('material_inventory_lots')
-    .select('*')
+    .select(`
+      *,
+      suppliers (
+        id,
+        name
+      ),
+      materials (
+        id,
+        code,
+        common_name,
+        base_unit,
+        category
+      )
+    `)
+    .eq('organization_id', profile.organization_id)
     .gt('available_quantity', 0)
+    .order('created_at', { ascending: false })
 
   const { data: outputs } = await supabase
     .from('material_process_stage_outputs')
-    .select('*')
+    .select(`
+      *,
+      materials (
+        id,
+        code,
+        common_name
+      )
+    `)
+    .eq('organization_id', profile.organization_id)
     .eq('sent_to_processed_inventory', false)
     .eq('was_used', false)
+    .order('created_at', { ascending: false })
 
 
   const { data: runs } = await supabase
     .from('material_process_runs')
-    .select('*')
+    .select(`
+      *,
+      materials:source_material_id (
+        id,
+        code,
+        common_name
+      )
+    `)
+    .eq('organization_id', profile.organization_id)
     .order('created_at', { ascending: false })
 
   return {
-    inventoryLots,
-    processOutputs: (outputs || []).map(computeWorkflowFields),
-    recentRuns: runs,
+    inventoryLots: (inventoryLots || []).map((lot) => ({
+      ...lot,
+      material_name: lot.materials?.common_name || 'Materia prima',
+      material_code: lot.materials?.code || null,
+    })),
+    processOutputs: (outputs || []).map((output) =>
+      computeWorkflowFields({
+        ...output,
+        material_name: output.materials?.common_name || 'Materia prima',
+        material_code: output.materials?.code || null,
+      })
+    ),
+    recentRuns: runs || [],
   }
 }
 
