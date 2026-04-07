@@ -36,6 +36,7 @@ export default function CxCPage() {
   useEffect(() => { load() }, [load])
 
   async function handleCobrar(row) {
+    if (row.status !== 'entregado') { setError('Solo se pueden cobrar pedidos entregados.'); return }
     setSaving(true)
     try { await markAsCobrado(row.id); setConfirming(null); load() }
     catch (e) { setError(e.message) }
@@ -143,7 +144,7 @@ export default function CxCPage() {
                       </p>
                       <p className="text-lg font-bold text-stone-900">Q {fmt(row.total)}</p>
                     </div>
-                    {row.status !== 'cobrado' && (
+                    {row.status === 'entregado' && (
                       <button onClick={() => setConfirming(row)}
                         className="rounded-2xl bg-[#2f5d50] px-4 py-2.5 text-sm font-semibold text-white hover:bg-[#264c42] transition whitespace-nowrap">
                         Registrar cobro
@@ -151,6 +152,11 @@ export default function CxCPage() {
                     )}
                     {row.status === 'cobrado' && (
                       <span className="rounded-2xl bg-emerald-100 px-4 py-2.5 text-sm font-semibold text-emerald-700">✓ Cobrado</span>
+                    )}
+                    {row.status !== 'cobrado' && row.status !== 'entregado' && (
+                      <span className="rounded-2xl bg-stone-100 px-4 py-2.5 text-sm font-medium text-stone-500 whitespace-nowrap">
+                        Pendiente de entrega
+                      </span>
                     )}
                   </div>
                 </div>

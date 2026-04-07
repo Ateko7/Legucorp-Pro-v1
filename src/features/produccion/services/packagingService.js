@@ -422,10 +422,15 @@ export async function createPackagingRunStrictRecipe({
         throw new Error(`No se encontró el lote seleccionado de ${req.material_name}.`);
       }
 
-      const unitCost =
+      // Use original_quantity as denominator; fall back to available_quantity for
+      // older lots created before the original_quantity column was populated.
+      const denominator =
         numberOrZero(lot.original_quantity) > 0
-          ? numberOrZero(lot.accumulated_cost) / numberOrZero(lot.original_quantity)
-          : 0;
+          ? numberOrZero(lot.original_quantity)
+          : numberOrZero(lot.available_quantity)
+      const unitCost = denominator > 0
+        ? numberOrZero(lot.accumulated_cost) / denominator
+        : 0;
 
       const totalCost = round2(unitCost * numberOrZero(allocation.quantity_used));
       totalProcessedCost += totalCost;
@@ -646,4 +651,88 @@ export async function createPackagingRunStrictRecipe({
     productionDate,
     expirationDate,
   };
+}
+
+// ─── Packaging orders (draft → en_proceso → completado) ──────────────────────
+
+const PRESENTATION_FIELDS = `
+  id, code, display_name, net_weight, unit, shelf_life_days, barcode,
+  product_bases ( common_name )
+`
+
+export async function getActivePackagingOrders() {
+  const profile = await getCurrentProfile()
+  const { data, error } = await supabase
+    .from('packaging_orders')
+    .select(`*, product_presentations ( ${PRESENTATION_FIELDS} )`)
+    .eq('organization_id', profile.organization_id)
+    .eq('status', 'en_proceso')
+    .order('created_at', { ascending: false })
+  if (error) throw error
+  return data || []
+}
+
+export async function createPackagingOrder({
+  productPresentationId,
+  runDate,
+  quantityToPack,
+  finishedLotCode,
+  notes,
+  selectedProcessedLotIdsByMaterial,
+}) {
+  const profile = await getCurrentProfile()
+  const { data, error } = await supabase
+    .from('packaging_orders')
+    .insert({
+      organization_id: profile.organization_id,
+      product_presentation_id: productPresentationId,
+      run_date: runDate,
+      quantity_to_pack: Number(quantityToPack),
+      finished_lot_code: finishedLotCode,
+      notes: notes || null,
+      selected_lots: selectedProcessedLotIdsByMaterial,
+      created_by: profile.id,
+    })
+    .select(`*, product_presentations ( ${PRESENTATION_FIELDS} )`)
+    .single()
+  if (error) throw error
+  return data
+}
+
+export async function completarPackagingOrder(orderId) {
+  const { data: order, error: e1 } = await supabase
+    .from('packaging_orders')
+    .select('*')
+    .eq('id', orderId)
+    .single()
+  if (e1) throw e1
+
+  const result = await createPackagingRunStrictRecipe({
+    productPresentationId: order.product_presentation_id,
+    runDate: order.run_date,
+    quantityPacked: numberOrZero(order.quantity_to_pack),
+    finishedLotCode: order.finished_lot_code,
+    notes: order.notes || '',
+    selectedProcessedLotIdsByMaterial: order.selected_lots || {},
+  })
+
+  const { error: e2 } = await supabase
+    .from('packaging_orders')
+    .update({
+      status: 'completado',
+      packaging_run_id: result.packagingRun.id,
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', orderId)
+  if (e2) throw e2
+
+  return result
+}
+
+export async function cancelarPackagingOrder(orderId) {
+  const { error } = await supabase
+    .from('packaging_orders')
+    .update({ status: 'cancelado', updated_at: new Date().toISOString() })
+    .eq('id', orderId)
+  if (error) throw error
 }

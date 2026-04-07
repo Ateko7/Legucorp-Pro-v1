@@ -128,6 +128,7 @@ export async function createProductPresentation(payload) {
       packaging_quantity:     Number(packaging_quantity || 1),
       producto_sombrilla_id:  payload.producto_sombrilla_id || null,
       peso_neto_kg:           payload.peso_neto_kg ? Number(payload.peso_neto_kg) : null,
+      barcode:                payload.barcode?.trim() || null,
       status,
       created_by: userId,
     })
@@ -183,6 +184,7 @@ export async function updateProductPresentation(id, payload) {
       packaging_quantity:     Number(packaging_quantity || 1),
       producto_sombrilla_id:  payload.producto_sombrilla_id || null,
       peso_neto_kg:           payload.peso_neto_kg ? Number(payload.peso_neto_kg) : null,
+      barcode:                payload.barcode?.trim() || null,
       status,
     })
     .eq('id', id)

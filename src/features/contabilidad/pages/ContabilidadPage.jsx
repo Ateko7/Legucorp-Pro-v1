@@ -149,8 +149,8 @@ function LibroVentas() {
           <p className="text-stone-400">No hay ventas facturadas en el período seleccionado.</p>
         </div>
       ) : (
-        <div className="rounded-3xl border border-stone-200 bg-white shadow-sm overflow-hidden">
-          <table className="w-full text-sm">
+        <div className="rounded-3xl border border-stone-200 bg-white shadow-sm overflow-hidden overflow-x-auto">
+          <table className="w-full min-w-[640px] text-sm">
             <thead>
               <tr className="border-b border-stone-100 bg-stone-50">
                 {['Fecha', 'Pedido', 'Cliente', 'NIT', 'Base (sin IVA)', `IVA ${(IVA_RATE*100).toFixed(0)}%`, 'Total'].map(h => (
@@ -294,8 +294,8 @@ function Asientos() {
                 </button>
 
                 {expanded[entry.id] && (
-                  <div className="border-t border-stone-100">
-                    <table className="w-full text-sm">
+                  <div className="border-t border-stone-100 overflow-x-auto">
+                    <table className="w-full min-w-[480px] text-sm">
                       <thead>
                         <tr className="bg-stone-50 border-b border-stone-100">
                           <th className="px-6 py-2 text-left text-xs text-stone-400 font-semibold uppercase">Cuenta</th>

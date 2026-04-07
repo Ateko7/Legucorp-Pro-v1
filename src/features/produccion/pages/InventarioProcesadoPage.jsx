@@ -25,7 +25,7 @@ function formatDate(value) {
 
 function Badge({ children, tone = 'slate' }) {
   const tones = {
-    slate: 'bg-slate-100 text-slate-700 border border-slate-200',
+    slate: 'bg-stone-100 text-stone-700 border border-stone-200',
     green: 'bg-emerald-50 text-emerald-700 border border-emerald-200',
     yellow: 'bg-amber-50 text-amber-700 border border-amber-200',
     red: 'bg-rose-50 text-rose-700 border border-rose-200',
@@ -65,7 +65,7 @@ function getStageTone(stage) {
 
 function EmptyState({ text }) {
   return (
-    <div className="border border-dashed border-slate-300 rounded-2xl p-10 text-center text-slate-500 text-sm bg-slate-50">
+    <div className="border border-dashed border-stone-300 rounded-2xl p-10 text-center text-stone-500 text-sm bg-stone-50">
       {text}
     </div>
   );
@@ -73,17 +73,17 @@ function EmptyState({ text }) {
 
 function KpiCard({ label, value, hint }) {
   return (
-    <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm">
-      <div className="text-sm text-slate-500">{label}</div>
-      <div className="mt-2 text-2xl font-bold text-slate-900">{value}</div>
-      {hint ? <div className="mt-1 text-xs text-slate-400">{hint}</div> : null}
+    <div className="bg-white border border-stone-200 rounded-2xl p-4 shadow-sm">
+      <div className="text-sm text-stone-500">{label}</div>
+      <div className="mt-2 text-2xl font-bold text-stone-900">{value}</div>
+      {hint ? <div className="mt-1 text-xs text-stone-400">{hint}</div> : null}
     </div>
   );
 }
 
 function SectionShell({ children }) {
   return (
-    <div className="bg-white border border-slate-200 rounded-3xl shadow-sm overflow-hidden">
+    <div className="bg-white border border-stone-200 rounded-3xl shadow-sm overflow-hidden">
       {children}
     </div>
   );
@@ -109,13 +109,13 @@ function EditLotModal({ lot, onClose, onSave, saving }) {
       <div className="bg-white w-full max-w-lg rounded-3xl shadow-2xl p-6">
         <div className="flex items-start justify-between gap-4 mb-5">
           <div>
-            <h3 className="text-xl font-semibold text-slate-900">Editar lote procesado</h3>
-            <p className="text-sm text-slate-500 mt-1">{lot.internal_lot}</p>
+            <h3 className="text-xl font-semibold text-stone-900">Editar lote procesado</h3>
+            <p className="text-sm text-stone-500 mt-1">{lot.internal_lot}</p>
           </div>
           <button
             type="button"
             onClick={onClose}
-            className="h-9 w-9 rounded-full border border-slate-200 text-slate-500 hover:bg-slate-50"
+            className="h-9 w-9 rounded-full border border-stone-200 text-stone-500 hover:bg-stone-50"
           >
             ✕
           </button>
@@ -123,36 +123,36 @@ function EditLotModal({ lot, onClose, onSave, saving }) {
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="grid grid-cols-1 gap-3">
-            <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4 space-y-2">
+            <div className="bg-stone-50 border border-stone-200 rounded-2xl p-4 space-y-2">
               <div className="flex items-center justify-between text-sm">
-                <span className="text-slate-500">Material</span>
-                <span className="font-medium text-slate-800">{lot.material_name}</span>
+                <span className="text-stone-500">Material</span>
+                <span className="font-medium text-stone-800">{lot.material_name}</span>
               </div>
               <div className="flex items-center justify-between text-sm">
-                <span className="text-slate-500">Disponible</span>
-                <span className="font-medium text-slate-800">
+                <span className="text-stone-500">Disponible</span>
+                <span className="font-medium text-stone-800">
                   {formatNumber(lot.available_quantity)} {lot.unit}
                 </span>
               </div>
             </div>
 
             <div>
-              <label className="block text-sm text-slate-600 mb-1.5">Ubicación</label>
+              <label className="block text-sm text-stone-600 mb-1.5">Ubicación</label>
               <input
                 type="text"
                 value={location}
                 onChange={(e) => setLocation(e.target.value)}
-                className="w-full border border-slate-300 rounded-2xl px-3 py-2.5 outline-none focus:ring-2 focus:ring-slate-200"
+                className="w-full border border-stone-300 rounded-2xl px-3 py-2.5 outline-none focus:ring-2 focus:ring-[#2f5d50]/10"
                 placeholder="Ej. Cuarto frío procesado"
               />
             </div>
 
             <div>
-              <label className="block text-sm text-slate-600 mb-1.5">Estado</label>
+              <label className="block text-sm text-stone-600 mb-1.5">Estado</label>
               <select
                 value={status}
                 onChange={(e) => setStatus(e.target.value)}
-                className="w-full border border-slate-300 rounded-2xl px-3 py-2.5 outline-none focus:ring-2 focus:ring-slate-200"
+                className="w-full border border-stone-300 rounded-2xl px-3 py-2.5 outline-none focus:ring-2 focus:ring-[#2f5d50]/10"
               >
                 <option value="disponible">disponible</option>
                 <option value="parcial">parcial</option>
@@ -166,14 +166,14 @@ function EditLotModal({ lot, onClose, onSave, saving }) {
             <button
               type="button"
               onClick={onClose}
-              className="px-4 py-2.5 rounded-2xl border border-slate-300 text-slate-700 hover:bg-slate-50"
+              className="px-4 py-2.5 rounded-2xl border border-stone-300 text-stone-700 hover:bg-stone-50"
             >
               Cancelar
             </button>
             <button
               type="submit"
               disabled={saving}
-              className="px-4 py-2.5 rounded-2xl bg-slate-900 text-white hover:bg-slate-800 disabled:opacity-50"
+              className="px-4 py-2.5 rounded-2xl bg-[#2f5d50] text-white hover:bg-[#264c42] disabled:opacity-50"
             >
               {saving ? 'Guardando...' : 'Guardar cambios'}
             </button>
@@ -253,11 +253,11 @@ export default function InventarioProcesadoPage() {
   }
 
   return (
-    <div className="min-h-full bg-slate-50/60 p-4 md:p-6 space-y-6">
+    <div className="min-h-full bg-stone-50/60 p-4 md:p-6 space-y-6">
       <div className="bg-green-800 rounded-3xl p-6 md:p-7 text-white shadow-lg">
         <div className="flex flex-col gap-2">
           <h1 className="text-2xl md:text-3xl font-bold">Inventario procesado</h1>
-          <p className="text-slate-200 max-w-3xl">
+          <p className="text-stone-200 max-w-3xl">
             Visualiza, organiza y da seguimiento a los lotes procesados que ya salieron de
             Procesos MP y están listos para el siguiente paso del flujo.
           </p>
@@ -289,28 +289,28 @@ export default function InventarioProcesadoPage() {
       </div>
 
       <SectionShell>
-        <div className="p-5 border-b border-slate-200 bg-white">
+        <div className="p-5 border-b border-stone-200 bg-white">
           <div className="flex flex-col xl:flex-row gap-4 xl:items-end xl:justify-between">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 w-full xl:max-w-3xl">
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1.5">Buscar</label>
+                <label className="block text-sm font-medium text-stone-700 mb-1.5">Buscar</label>
                 <input
                   type="text"
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
-                  className="w-full border border-slate-300 rounded-2xl px-3 py-2.5 bg-white outline-none focus:ring-2 focus:ring-slate-200"
+                  className="w-full border border-stone-300 rounded-2xl px-3 py-2.5 bg-white outline-none focus:ring-2 focus:ring-[#2f5d50]/10"
                   placeholder="Lote, material, código, tipo, ubicación..."
                 />
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1.5">
+                <label className="block text-sm font-medium text-stone-700 mb-1.5">
                   Filtrar por estado
                 </label>
                 <select
                   value={statusFilter}
                   onChange={(e) => setStatusFilter(e.target.value)}
-                  className="w-full border border-slate-300 rounded-2xl px-3 py-2.5 bg-white outline-none focus:ring-2 focus:ring-slate-200"
+                  className="w-full border border-stone-300 rounded-2xl px-3 py-2.5 bg-white outline-none focus:ring-2 focus:ring-[#2f5d50]/10"
                 >
                   <option value="todos">Todos</option>
                   <option value="disponible">disponible</option>
@@ -322,14 +322,14 @@ export default function InventarioProcesadoPage() {
             </div>
 
             <div className="flex items-center gap-3">
-              <div className="text-sm text-slate-500">
+              <div className="text-sm text-stone-500">
                 {filteredLots.length} lote{filteredLots.length === 1 ? '' : 's'}
               </div>
               <button
                 type="button"
                 onClick={loadData}
                 disabled={loading}
-                className="px-4 py-2.5 rounded-2xl border border-slate-300 text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+                className="px-4 py-2.5 rounded-2xl border border-stone-300 text-stone-700 hover:bg-stone-50 disabled:opacity-50"
               >
                 {loading ? 'Actualizando...' : 'Actualizar'}
               </button>
@@ -345,37 +345,37 @@ export default function InventarioProcesadoPage() {
           ) : filteredLots.length ? (
             <div className="overflow-auto">
               <table className="min-w-full text-sm">
-                <thead className="bg-slate-50/80">
-                  <tr className="text-left border-b border-slate-200">
-                    <th className="py-3 px-5 font-semibold text-slate-600">Lote</th>
-                    <th className="py-3 px-5 font-semibold text-slate-600">Material</th>
-                    <th className="py-3 px-5 font-semibold text-slate-600">Tipo</th>
-                    <th className="py-3 px-5 font-semibold text-slate-600">Etapa</th>
-                    <th className="py-3 px-5 font-semibold text-slate-600">Disponible</th>
-                    <th className="py-3 px-5 font-semibold text-slate-600">Original</th>
-                    <th className="py-3 px-5 font-semibold text-slate-600">Costo</th>
-                    <th className="py-3 px-5 font-semibold text-slate-600">Ubicación</th>
-                    <th className="py-3 px-5 font-semibold text-slate-600">Estado</th>
-                    <th className="py-3 px-5 font-semibold text-slate-600">Fecha</th>
-                    <th className="py-3 px-5 font-semibold text-slate-600 text-right">Acción</th>
+                <thead className="bg-stone-50/80">
+                  <tr className="text-left border-b border-stone-200">
+                    <th className="py-3 px-5 font-semibold text-stone-600">Lote</th>
+                    <th className="py-3 px-5 font-semibold text-stone-600">Material</th>
+                    <th className="py-3 px-5 font-semibold text-stone-600">Tipo</th>
+                    <th className="py-3 px-5 font-semibold text-stone-600">Etapa</th>
+                    <th className="py-3 px-5 font-semibold text-stone-600">Disponible</th>
+                    <th className="py-3 px-5 font-semibold text-stone-600">Original</th>
+                    <th className="py-3 px-5 font-semibold text-stone-600">Costo</th>
+                    <th className="py-3 px-5 font-semibold text-stone-600">Ubicación</th>
+                    <th className="py-3 px-5 font-semibold text-stone-600">Estado</th>
+                    <th className="py-3 px-5 font-semibold text-stone-600">Fecha</th>
+                    <th className="py-3 px-5 font-semibold text-stone-600 text-right">Acción</th>
                   </tr>
                 </thead>
                 <tbody>
                   {filteredLots.map((lot) => (
                     <tr
                       key={lot.id}
-                      className="border-b border-slate-100 hover:bg-slate-50/70 transition-colors"
+                      className="border-b border-stone-100 hover:bg-stone-50/70 transition-colors"
                     >
                       <td className="py-4 px-5">
-                        <div className="font-semibold text-slate-900">{lot.internal_lot}</div>
-                        <div className="text-xs text-slate-500 mt-1">
+                        <div className="font-semibold text-stone-900">{lot.internal_lot}</div>
+                        <div className="text-xs text-stone-500 mt-1">
                           Origen: {lot.source_internal_lot || '—'}
                         </div>
                       </td>
 
                       <td className="py-4 px-5">
-                        <div className="font-medium text-slate-800">{lot.material_name || '—'}</div>
-                        <div className="text-xs text-slate-500 mt-1">{lot.material_code || 'Sin código'}</div>
+                        <div className="font-medium text-stone-800">{lot.material_name || '—'}</div>
+                        <div className="text-xs text-stone-500 mt-1">{lot.material_code || 'Sin código'}</div>
                       </td>
 
                       <td className="py-4 px-5">
@@ -391,21 +391,21 @@ export default function InventarioProcesadoPage() {
                       </td>
 
                       <td className="py-4 px-5">
-                        <div className="font-semibold text-slate-900">
+                        <div className="font-semibold text-stone-900">
                           {formatNumber(lot.available_quantity)} {lot.unit}
                         </div>
                       </td>
 
-                      <td className="py-4 px-5 text-slate-700">
+                      <td className="py-4 px-5 text-stone-700">
                         {formatNumber(lot.original_quantity)} {lot.unit}
                       </td>
 
-                      <td className="py-4 px-5 text-slate-700">
+                      <td className="py-4 px-5 text-stone-700">
                         {formatNumber(lot.accumulated_cost)}
                       </td>
 
                       <td className="py-4 px-5">
-                        <div className="text-slate-700">{lot.location || '—'}</div>
+                        <div className="text-stone-700">{lot.location || '—'}</div>
                       </td>
 
                       <td className="py-4 px-5">
@@ -414,7 +414,7 @@ export default function InventarioProcesadoPage() {
                         </Badge>
                       </td>
 
-                      <td className="py-4 px-5 text-slate-600">
+                      <td className="py-4 px-5 text-stone-600">
                         {formatDate(lot.created_at)}
                       </td>
 
@@ -422,7 +422,7 @@ export default function InventarioProcesadoPage() {
                         <button
                           type="button"
                           onClick={() => setSelectedLot(lot)}
-                          className="px-3.5 py-2 rounded-xl bg-slate-900 text-white text-xs font-medium hover:bg-slate-800"
+                          className="px-3.5 py-2 rounded-xl bg-[#2f5d50] text-white text-xs font-medium hover:bg-[#264c42]"
                         >
                           Editar
                         </button>

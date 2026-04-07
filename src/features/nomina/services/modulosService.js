@@ -282,7 +282,7 @@ export async function calcularLiquidacion(empleadoId, { fecha_salida, motivo_sal
 
   const { data, error } = await supabase.from('liquidaciones_empleado').insert({
     organization_id:                  profile.organization_id,
-    empleado_id,
+    empleado_id:                      empleadoId,
     fecha_salida,
     motivo_salida,
     salario_base_referencia:          salBase,

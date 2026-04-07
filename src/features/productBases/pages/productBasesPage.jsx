@@ -28,6 +28,7 @@ const emptyPresentationForm = {
   status: 'activo',
   producto_sombrilla_id: '',
   peso_neto_kg: '',
+  barcode: '',
 }
 
 export default function ProductBasesPage() {
@@ -133,6 +134,7 @@ export default function ProductBasesPage() {
       status:                 presentation.status || 'activo',
       producto_sombrilla_id:  presentation.producto_sombrilla_id || '',
       peso_neto_kg:           presentation.peso_neto_kg != null ? String(presentation.peso_neto_kg) : '',
+      barcode:                presentation.barcode || '',
     })
     setEditingPresentationId(presentation.id)
     setError('')
@@ -665,6 +667,20 @@ export default function ProductBasesPage() {
                 </Field>
               </>
             )}
+          </section>
+
+          <section>
+            <h3 className="mb-3 text-sm font-semibold text-stone-700">Código de barras</h3>
+            <Field label="Código de barras (EAN-13, UPC, etc.)">
+              <input
+                name="barcode"
+                type="text"
+                value={presentationForm.barcode}
+                onChange={handlePresentationChange}
+                placeholder="Ej. 7401234567890"
+                className="w-full rounded-2xl border border-stone-300 bg-stone-50 px-4 py-3 text-stone-700 outline-none transition focus:border-emerald-700 focus:bg-white focus:ring-4 focus:ring-emerald-100"
+              />
+            </Field>
           </section>
 
           <div className="rounded-2xl border border-stone-200 bg-stone-50 px-4 py-4 text-sm text-stone-600">

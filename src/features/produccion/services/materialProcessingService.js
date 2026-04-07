@@ -276,6 +276,7 @@ export async function sendDriedOutputToProcessedInventory({
       internal_lot: output.output_lot_code,
       unit: output.unit,
       available_quantity: preview.finalQty,
+      original_quantity: preview.finalQty,
       accumulated_cost: payable,
     })
     .select()

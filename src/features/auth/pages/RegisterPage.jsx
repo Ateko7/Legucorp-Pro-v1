@@ -2,9 +2,19 @@ import { useMemo, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { registerAdmin, registerWithInvitation } from '../services/authService'
 
+const INP = 'w-full rounded-2xl border border-stone-300 bg-stone-50 px-4 py-3 text-sm text-stone-800 outline-none transition focus:border-[#2f5d50] focus:bg-white focus:ring-4 focus:ring-[#2f5d50]/10'
+
+function Field({ label, children }) {
+  return (
+    <label className="block">
+      <span className="mb-1.5 block text-sm font-medium text-stone-700">{label}</span>
+      {children}
+    </label>
+  )
+}
+
 export default function RegisterPage() {
   const navigate = useNavigate()
-
   const [isAdminCreator, setIsAdminCreator] = useState(false)
   const [showPassword, setShowPassword] = useState(false)
   const [showConfirmPassword, setShowConfirmPassword] = useState(false)
@@ -21,15 +31,10 @@ export default function RegisterPage() {
     invitationCode: '',
   })
 
-  const passwordsMatch = useMemo(() => {
-    return form.password === form.confirmPassword
-  }, [form.password, form.confirmPassword])
+  const passwordsMatch = useMemo(() => form.password === form.confirmPassword, [form.password, form.confirmPassword])
 
   function handleChange(e) {
-    setForm((prev) => ({
-      ...prev,
-      [e.target.name]: e.target.value,
-    }))
+    setForm(prev => ({ ...prev, [e.target.name]: e.target.value }))
   }
 
   async function handleSubmit(e) {
@@ -37,18 +42,10 @@ export default function RegisterPage() {
     setError('')
     setMessage('')
 
-    if (!passwordsMatch) {
-      setError('Las contraseñas no coinciden exactamente.')
-      return
-    }
-
-    if (form.password.length < 6) {
-      setError('La contraseña debe tener al menos 6 caracteres.')
-      return
-    }
+    if (!passwordsMatch) { setError('Las contraseñas no coinciden.'); return }
+    if (form.password.length < 6) { setError('La contraseña debe tener al menos 6 caracteres.'); return }
 
     setLoading(true)
-
     try {
       if (isAdminCreator) {
         const result = await registerAdmin({
@@ -57,10 +54,7 @@ export default function RegisterPage() {
           fullName: form.fullName,
           organizationName: form.organizationName,
         })
-
-        setMessage(
-          `Cuenta creada. Código de invitación: ${result.onboarding?.invitation_code || ''}`
-        )
+        setMessage(`Cuenta creada. Código de invitación: ${result.onboarding?.invitation_code || ''}`)
       } else {
         await registerWithInvitation({
           email: form.email,
@@ -68,13 +62,9 @@ export default function RegisterPage() {
           fullName: form.fullName,
           invitationCode: form.invitationCode,
         })
-
         setMessage('Cuenta creada y vinculada a la empresa correctamente.')
       }
-
-      setTimeout(() => {
-        navigate('/')
-      }, 1200)
+      setTimeout(() => navigate('/'), 1200)
     } catch (err) {
       setError(err.message || 'No se pudo completar el registro')
     } finally {
@@ -83,172 +73,112 @@ export default function RegisterPage() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-100 flex items-center justify-center px-4 py-8">
-      <div className="w-full max-w-2xl rounded-3xl bg-white p-8 shadow-2xl border border-slate-200">
-        <div className="mb-8">
-          <div className="inline-flex items-center rounded-full bg-amber-100 px-3 py-1 text-xs font-semibold text-amber-800">
-            Onboarding
+    <div className="flex min-h-screen items-center justify-center bg-[#f6f1e8] px-4 py-12">
+      <div className="w-full max-w-xl">
+
+        {/* Brand */}
+        <div className="mb-8 flex flex-col items-center text-center">
+          <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-white shadow-md overflow-hidden">
+            <img src="/Logo Leume Impresiones CMYK (1).png" alt="Legucorp" className="h-full w-full object-contain" />
           </div>
-          <h1 className="mt-4 text-3xl font-bold text-slate-900">Crear cuenta</h1>
-          <p className="mt-2 text-sm text-slate-500">
-            Crea tu usuario y vincúlalo a una empresa o crea una nueva.
-          </p>
+          <h1 className="text-2xl font-bold tracking-tight text-stone-900">Crear cuenta</h1>
+          <p className="mt-1 text-sm text-stone-500">Vincula tu usuario a una empresa o crea una nueva</p>
         </div>
 
-        <div className="mb-6 flex items-center justify-between rounded-2xl border border-slate-200 bg-slate-50 p-4">
-          <div>
-            <p className="font-semibold text-slate-800">¿Eres admin creador?</p>
-            <p className="text-sm text-slate-500">
-              Actívalo si este usuario va a crear la empresa por primera vez.
-            </p>
-          </div>
+        {/* Card */}
+        <div className="rounded-3xl border border-[#dccfbe] bg-white p-7 shadow-sm">
 
-          <button
-            type="button"
-            onClick={() => setIsAdminCreator((v) => !v)}
-            className={`rounded-2xl px-4 py-2 font-semibold transition ${
-              isAdminCreator
-                ? 'bg-green-700 text-white hover:bg-green-800'
-                : 'bg-slate-200 text-slate-700 hover:bg-slate-300'
-            }`}
-          >
-            {isAdminCreator ? 'Sí' : 'No'}
-          </button>
-        </div>
-
-        <form onSubmit={handleSubmit} className="grid gap-4 md:grid-cols-2">
-          <Field label="Nombre completo">
-            <input
-              name="fullName"
-              value={form.fullName}
-              onChange={handleChange}
-              className="w-full rounded-2xl border border-slate-300 px-4 py-3 outline-none transition focus:border-green-600 focus:ring-4 focus:ring-green-100"
-              required
-            />
-          </Field>
-
-          <Field label="Correo">
-            <input
-              name="email"
-              type="email"
-              value={form.email}
-              onChange={handleChange}
-              className="w-full rounded-2xl border border-slate-300 px-4 py-3 outline-none transition focus:border-green-600 focus:ring-4 focus:ring-green-100"
-              required
-            />
-          </Field>
-
-          <Field label="Contraseña">
-            <div className="flex gap-2">
-              <input
-                name="password"
-                type={showPassword ? 'text' : 'password'}
-                value={form.password}
-                onChange={handleChange}
-                className="w-full rounded-2xl border border-slate-300 px-4 py-3 outline-none transition focus:border-green-600 focus:ring-4 focus:ring-green-100"
-                required
-              />
-              <button
-                type="button"
-                onClick={() => setShowPassword((v) => !v)}
-                className="rounded-2xl border border-slate-300 bg-slate-50 px-4 py-3 font-medium text-slate-700 hover:bg-slate-100"
-              >
-                {showPassword ? 'Ocultar' : 'Ver'}
-              </button>
+          {/* Admin toggle */}
+          <div className="mb-6 flex items-center justify-between rounded-2xl border border-stone-200 bg-stone-50 p-4">
+            <div>
+              <p className="text-sm font-semibold text-stone-800">¿Eres administrador creador?</p>
+              <p className="text-xs text-stone-500 mt-0.5">Actívalo si vas a crear la empresa por primera vez.</p>
             </div>
-          </Field>
-
-          <Field label="Confirmar contraseña">
-            <div className="flex gap-2">
-              <input
-                name="confirmPassword"
-                type={showConfirmPassword ? 'text' : 'password'}
-                value={form.confirmPassword}
-                onChange={handleChange}
-                className="w-full rounded-2xl border border-slate-300 px-4 py-3 outline-none transition focus:border-green-600 focus:ring-4 focus:ring-green-100"
-                required
-              />
-              <button
-                type="button"
-                onClick={() => setShowConfirmPassword((v) => !v)}
-                className="rounded-2xl border border-slate-300 bg-slate-50 px-4 py-3 font-medium text-slate-700 hover:bg-slate-100"
-              >
-                {showConfirmPassword ? 'Ocultar' : 'Ver'}
-              </button>
-            </div>
-          </Field>
-
-          {isAdminCreator ? (
-            <div className="md:col-span-2">
-              <Field label="Nombre de la empresa">
-                <input
-                  name="organizationName"
-                  value={form.organizationName}
-                  onChange={handleChange}
-                  className="w-full rounded-2xl border border-slate-300 px-4 py-3 outline-none transition focus:border-green-600 focus:ring-4 focus:ring-green-100"
-                  required
-                />
-              </Field>
-            </div>
-          ) : (
-            <div className="md:col-span-2">
-              <Field label="Código de invitación">
-                <input
-                  name="invitationCode"
-                  value={form.invitationCode}
-                  onChange={handleChange}
-                  className="w-full rounded-2xl border border-slate-300 px-4 py-3 outline-none transition focus:border-green-600 focus:ring-4 focus:ring-green-100"
-                  required
-                />
-              </Field>
-            </div>
-          )}
-
-          <div className="md:col-span-2">
-            {!passwordsMatch && form.confirmPassword ? (
-              <div className="mb-3 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-                Las contraseñas no coinciden.
-              </div>
-            ) : null}
-
-            {error ? (
-              <div className="mb-3 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-                {error}
-              </div>
-            ) : null}
-
-            {message ? (
-              <div className="mb-3 rounded-2xl border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-700">
-                {message}
-              </div>
-            ) : null}
-
             <button
-              type="submit"
-              disabled={loading}
-              className="w-full rounded-2xl bg-green-700 px-4 py-3 font-semibold text-white shadow-lg transition hover:bg-green-800 disabled:opacity-60"
+              type="button"
+              onClick={() => setIsAdminCreator(v => !v)}
+              className={`ml-4 shrink-0 rounded-xl px-4 py-2 text-sm font-semibold transition ${
+                isAdminCreator ? 'bg-[#2f5d50] text-white' : 'bg-stone-200 text-stone-700 hover:bg-stone-300'
+              }`}
             >
-              {loading ? 'Creando cuenta...' : 'Crear cuenta'}
+              {isAdminCreator ? 'Sí' : 'No'}
             </button>
-
-            <p className="mt-4 text-sm text-slate-500">
-              ¿Ya tienes cuenta?{' '}
-              <Link to="/login" className="font-semibold text-green-700 hover:text-green-800">
-                Ingresar
-              </Link>
-            </p>
           </div>
-        </form>
+
+          <form onSubmit={handleSubmit} className="grid gap-4 md:grid-cols-2">
+            <Field label="Nombre completo">
+              <input name="fullName" value={form.fullName} onChange={handleChange} required className={INP} placeholder="Tu nombre" />
+            </Field>
+
+            <Field label="Correo electrónico">
+              <input name="email" type="email" value={form.email} onChange={handleChange} required className={INP} placeholder="tu@empresa.com" />
+            </Field>
+
+            <Field label="Contraseña">
+              <div className="flex gap-2">
+                <input
+                  name="password" type={showPassword ? 'text' : 'password'}
+                  value={form.password} onChange={handleChange} required className={INP} placeholder="Mín. 6 caracteres"
+                />
+                <button type="button" onClick={() => setShowPassword(v => !v)}
+                  className="shrink-0 rounded-2xl border border-stone-300 bg-stone-50 px-3 text-xs font-semibold text-stone-600 hover:bg-stone-100">
+                  {showPassword ? 'Ocultar' : 'Ver'}
+                </button>
+              </div>
+            </Field>
+
+            <Field label="Confirmar contraseña">
+              <div className="flex gap-2">
+                <input
+                  name="confirmPassword" type={showConfirmPassword ? 'text' : 'password'}
+                  value={form.confirmPassword} onChange={handleChange} required className={INP} placeholder="Repetir contraseña"
+                />
+                <button type="button" onClick={() => setShowConfirmPassword(v => !v)}
+                  className="shrink-0 rounded-2xl border border-stone-300 bg-stone-50 px-3 text-xs font-semibold text-stone-600 hover:bg-stone-100">
+                  {showConfirmPassword ? 'Ocultar' : 'Ver'}
+                </button>
+              </div>
+            </Field>
+
+            <div className="md:col-span-2">
+              {isAdminCreator ? (
+                <Field label="Nombre de la empresa">
+                  <input name="organizationName" value={form.organizationName} onChange={handleChange} required className={INP} placeholder="Ej. Legucorp S.A." />
+                </Field>
+              ) : (
+                <Field label="Código de invitación">
+                  <input name="invitationCode" value={form.invitationCode} onChange={handleChange} required className={INP} placeholder="Código de 8 caracteres" />
+                </Field>
+              )}
+            </div>
+
+            <div className="md:col-span-2 space-y-3">
+              {!passwordsMatch && form.confirmPassword && (
+                <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">Las contraseñas no coinciden.</div>
+              )}
+              {error && (
+                <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>
+              )}
+              {message && (
+                <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">{message}</div>
+              )}
+
+              <button
+                type="submit"
+                disabled={loading}
+                className="w-full rounded-2xl bg-[#2f5d50] py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-[#264c42] disabled:opacity-60"
+              >
+                {loading ? 'Creando cuenta...' : 'Crear cuenta'}
+              </button>
+
+              <p className="text-center text-sm text-stone-500">
+                ¿Ya tienes cuenta?{' '}
+                <Link to="/login" className="font-semibold text-[#2f5d50] hover:underline">Ingresar</Link>
+              </p>
+            </div>
+          </form>
+        </div>
       </div>
     </div>
-  )
-}
-
-function Field({ label, children }) {
-  return (
-    <label className="block">
-      <span className="mb-2 block text-sm font-medium text-slate-700">{label}</span>
-      {children}
-    </label>
   )
 }

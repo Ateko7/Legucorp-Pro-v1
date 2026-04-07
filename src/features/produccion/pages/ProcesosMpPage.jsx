@@ -24,10 +24,10 @@ function formatNumber(value) {
 
 function SectionCard({ title, subtitle, children }) {
   return (
-    <div className="bg-white border border-slate-200 rounded-2xl shadow-sm p-4">
+    <div className="bg-white border border-stone-200 rounded-2xl shadow-sm p-4">
       <div className="mb-4">
-        <h2 className="text-lg font-semibold text-slate-800">{title}</h2>
-        {subtitle ? <p className="text-sm text-slate-500 mt-1">{subtitle}</p> : null}
+        <h2 className="text-lg font-semibold text-stone-800">{title}</h2>
+        {subtitle ? <p className="text-sm text-stone-500 mt-1">{subtitle}</p> : null}
       </div>
       {children}
     </div>
@@ -36,7 +36,7 @@ function SectionCard({ title, subtitle, children }) {
 
 function EmptyState({ text }) {
   return (
-    <div className="border border-dashed border-slate-300 rounded-xl p-6 text-center text-slate-500 text-sm">
+    <div className="border border-dashed border-stone-300 rounded-xl p-6 text-center text-stone-500 text-sm">
       {text}
     </div>
   )
@@ -44,7 +44,7 @@ function EmptyState({ text }) {
 
 function Badge({ children, tone = 'slate' }) {
   const tones = {
-    slate: 'bg-slate-100 text-slate-700',
+    slate: 'bg-stone-100 text-stone-700',
     green: 'bg-green-100 text-green-700',
     yellow: 'bg-yellow-100 text-yellow-700',
     blue: 'bg-blue-100 text-blue-700',
@@ -62,8 +62,8 @@ function Badge({ children, tone = 'slate' }) {
 function DataRow({ label, value }) {
   return (
     <div className="flex items-center justify-between gap-3 text-sm">
-      <span className="text-slate-500">{label}</span>
-      <span className="font-medium text-slate-800 text-right">{value}</span>
+      <span className="text-stone-500">{label}</span>
+      <span className="font-medium text-stone-800 text-right">{value}</span>
     </div>
   )
 }
@@ -78,11 +78,11 @@ function getWorkflowTone(status) {
 
 function InventoryLotCard({ lot, onSelect }) {
   return (
-    <div className="border border-slate-200 rounded-xl p-4 flex flex-col gap-3">
+    <div className="border border-stone-200 rounded-xl p-4 flex flex-col gap-3">
       <div className="flex items-start justify-between gap-3">
         <div>
-          <h3 className="font-semibold text-slate-800">{lot.material_name}</h3>
-          <p className="text-sm text-slate-500">{lot.material_code || 'Sin código'}</p>
+          <h3 className="font-semibold text-stone-800">{lot.material_name}</h3>
+          <p className="text-sm text-stone-500">{lot.material_code || 'Sin código'}</p>
         </div>
         <Badge tone="green">Disponible</Badge>
       </div>
@@ -97,7 +97,7 @@ function InventoryLotCard({ lot, onSelect }) {
       <button
         type="button"
         onClick={() => onSelect(lot)}
-        className="mt-1 px-4 py-2 rounded-xl bg-slate-900 text-white text-sm hover:bg-slate-800"
+        className="mt-1 px-4 py-2 rounded-xl bg-[#2f5d50] text-white text-sm hover:bg-[#264c42]"
       >
         Iniciar proceso
       </button>
@@ -114,7 +114,7 @@ function RecentRunsTable({ runs }) {
     <div className="overflow-auto">
       <table className="min-w-full text-sm">
         <thead>
-          <tr className="text-left border-b border-slate-200">
+          <tr className="text-left border-b border-stone-200">
             <th className="py-2 pr-4">Fecha</th>
             <th className="py-2 pr-4">Lote origen</th>
             <th className="py-2 pr-4">Material</th>
@@ -125,7 +125,7 @@ function RecentRunsTable({ runs }) {
         </thead>
         <tbody>
           {runs.map((run) => (
-            <tr key={run.id} className="border-b border-slate-100">
+            <tr key={run.id} className="border-b border-stone-100">
               <td className="py-2 pr-4">{run.process_date}</td>
               <td className="py-2 pr-4">{run.source_internal_lot}</td>
               <td className="py-2 pr-4">{run.materials?.common_name || '—'}</td>
@@ -206,12 +206,12 @@ function InitialProcessModal({ lot, onClose, onSubmit, loading }) {
       <div className="bg-white w-full max-w-2xl rounded-2xl shadow-xl p-5">
         <div className="flex items-start justify-between gap-4 mb-4">
           <div>
-            <h3 className="text-lg font-semibold text-slate-800">Iniciar proceso</h3>
-            <p className="text-sm text-slate-500">
+            <h3 className="text-lg font-semibold text-stone-800">Iniciar proceso</h3>
+            <p className="text-sm text-stone-500">
               {lot.material_name} · lote {lot.internal_lot}
             </p>
           </div>
-          <button type="button" onClick={onClose} className="text-slate-500 hover:text-slate-700">
+          <button type="button" onClick={onClose} className="text-stone-500 hover:text-stone-700">
             ✕
           </button>
         </div>
@@ -219,21 +219,21 @@ function InitialProcessModal({ lot, onClose, onSubmit, loading }) {
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div>
-              <label className="block text-sm text-slate-600 mb-1">Fecha de proceso</label>
+              <label className="block text-sm text-stone-600 mb-1">Fecha de proceso</label>
               <input
                 type="date"
                 value={processDate}
                 onChange={(e) => setProcessDate(e.target.value)}
-                className="w-full border border-slate-300 rounded-xl px-3 py-2"
+                className="w-full border border-stone-300 rounded-xl px-3 py-2"
               />
             </div>
 
             <div>
-              <label className="block text-sm text-slate-600 mb-1">Etapa inicial</label>
+              <label className="block text-sm text-stone-600 mb-1">Etapa inicial</label>
               <select
                 value={startStage}
                 onChange={(e) => setStartStage(e.target.value)}
-                className="w-full border border-slate-300 rounded-xl px-3 py-2"
+                className="w-full border border-stone-300 rounded-xl px-3 py-2"
               >
                 <option value={STAGES.DESHOJE}>deshoje</option>
                 <option value={STAGES.LAVADO}>lavado</option>
@@ -242,12 +242,12 @@ function InitialProcessModal({ lot, onClose, onSubmit, loading }) {
             </div>
 
             <div>
-              <label className="block text-sm text-slate-600 mb-1">Cantidad disponible</label>
+              <label className="block text-sm text-stone-600 mb-1">Cantidad disponible</label>
               <input
                 type="text"
                 disabled
                 value={`${formatNumber(lot.available_quantity)} ${lot.unit}`}
-                className="w-full border border-slate-200 bg-slate-50 rounded-xl px-3 py-2"
+                className="w-full border border-stone-200 bg-stone-50 rounded-xl px-3 py-2"
               />
             </div>
           </div>
@@ -255,36 +255,36 @@ function InitialProcessModal({ lot, onClose, onSubmit, loading }) {
           {startStage === STAGES.DESHOJE ? (
             <>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="border border-slate-200 rounded-xl p-4">
-                  <h4 className="font-medium text-slate-800 mb-3">Sublote normal</h4>
+                <div className="border border-stone-200 rounded-xl p-4">
+                  <h4 className="font-medium text-stone-800 mb-3">Sublote normal</h4>
                   <div>
-                    <label className="block text-sm text-slate-600 mb-1">Cantidad salida</label>
+                    <label className="block text-sm text-stone-600 mb-1">Cantidad salida</label>
                     <input
                       type="number"
                       step="0.01"
                       value={normalQty}
                       onChange={(e) => setNormalQty(e.target.value)}
-                      className="w-full border border-slate-300 rounded-xl px-3 py-2"
+                      className="w-full border border-stone-300 rounded-xl px-3 py-2"
                     />
                   </div>
                 </div>
 
-                <div className="border border-slate-200 rounded-xl p-4">
-                  <h4 className="font-medium text-slate-800 mb-3">Sublote mini</h4>
+                <div className="border border-stone-200 rounded-xl p-4">
+                  <h4 className="font-medium text-stone-800 mb-3">Sublote mini</h4>
                   <div>
-                    <label className="block text-sm text-slate-600 mb-1">Cantidad salida</label>
+                    <label className="block text-sm text-stone-600 mb-1">Cantidad salida</label>
                     <input
                       type="number"
                       step="0.01"
                       value={miniQty}
                       onChange={(e) => setMiniQty(e.target.value)}
-                      className="w-full border border-slate-300 rounded-xl px-3 py-2"
+                      className="w-full border border-stone-300 rounded-xl px-3 py-2"
                     />
                   </div>
                 </div>
               </div>
 
-              <div className="border border-slate-200 rounded-xl p-4 bg-slate-50">
+              <div className="border border-stone-200 rounded-xl p-4 bg-stone-50">
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
                   <DataRow label="Entrada" value={`${formatNumber(inputQty)} ${lot.unit}`} />
                   <DataRow label="Total salidas" value={`${formatNumber(totalOutputDeshoje)} ${lot.unit}`} />
@@ -296,22 +296,22 @@ function InitialProcessModal({ lot, onClose, onSubmit, loading }) {
             <>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm text-slate-600 mb-1">Cantidad salida</label>
+                  <label className="block text-sm text-stone-600 mb-1">Cantidad salida</label>
                   <input
                     type="number"
                     step="0.01"
                     value={singleOutputQty}
                     onChange={(e) => setSingleOutputQty(e.target.value)}
-                    className="w-full border border-slate-300 rounded-xl px-3 py-2"
+                    className="w-full border border-stone-300 rounded-xl px-3 py-2"
                   />
                 </div>
                 <div>
-                  <label className="block text-sm text-slate-600 mb-1">Merma calculada</label>
+                  <label className="block text-sm text-stone-600 mb-1">Merma calculada</label>
                   <input
                     type="text"
                     disabled
                     value={`${formatNumber(wasteSingle)} ${lot.unit}`}
-                    className="w-full border border-slate-200 bg-slate-50 rounded-xl px-3 py-2"
+                    className="w-full border border-stone-200 bg-stone-50 rounded-xl px-3 py-2"
                   />
                 </div>
               </div>
@@ -319,12 +319,12 @@ function InitialProcessModal({ lot, onClose, onSubmit, loading }) {
           )}
 
           <div>
-            <label className="block text-sm text-slate-600 mb-1">Notas</label>
+            <label className="block text-sm text-stone-600 mb-1">Notas</label>
             <textarea
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
               rows={3}
-              className="w-full border border-slate-300 rounded-xl px-3 py-2"
+              className="w-full border border-stone-300 rounded-xl px-3 py-2"
             />
           </div>
 
@@ -332,14 +332,14 @@ function InitialProcessModal({ lot, onClose, onSubmit, loading }) {
             <button
               type="button"
               onClick={onClose}
-              className="px-4 py-2 rounded-xl border border-slate-300 text-slate-700"
+              className="px-4 py-2 rounded-xl border border-stone-300 text-stone-700"
             >
               Cancelar
             </button>
             <button
               type="submit"
               disabled={!canSubmit || loading}
-              className="px-4 py-2 rounded-xl bg-slate-900 text-white disabled:opacity-50"
+              className="px-4 py-2 rounded-xl bg-[#2f5d50] text-white disabled:opacity-50"
             >
               {loading ? 'Guardando...' : 'Guardar proceso'}
             </button>
@@ -385,60 +385,60 @@ function AdvanceStageModal({ output, nextStage, onClose, onSubmit, loading }) {
       <div className="bg-white w-full max-w-xl rounded-2xl shadow-xl p-5">
         <div className="flex items-start justify-between gap-4 mb-4">
           <div>
-            <h3 className="text-lg font-semibold text-slate-800">{title}</h3>
-            <p className="text-sm text-slate-500">
+            <h3 className="text-lg font-semibold text-stone-800">{title}</h3>
+            <p className="text-sm text-stone-500">
               {output.material_name} · {output.output_lot_code}
             </p>
           </div>
-          <button type="button" onClick={onClose} className="text-slate-500 hover:text-slate-700">
+          <button type="button" onClick={onClose} className="text-stone-500 hover:text-stone-700">
             ✕
           </button>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-4">
-          <div className="border border-slate-200 rounded-xl p-4 bg-slate-50">
+          <div className="border border-stone-200 rounded-xl p-4 bg-stone-50">
             <DataRow label="Cantidad disponible de entrada" value={`${formatNumber(inputQty)} ${output.unit}`} />
           </div>
 
           <div>
-            <label className="block text-sm text-slate-600 mb-1">Fecha de proceso</label>
+            <label className="block text-sm text-stone-600 mb-1">Fecha de proceso</label>
             <input
               type="date"
               value={processDate}
               onChange={(e) => setProcessDate(e.target.value)}
-              className="w-full border border-slate-300 rounded-xl px-3 py-2"
+              className="w-full border border-stone-300 rounded-xl px-3 py-2"
             />
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm text-slate-600 mb-1">Cantidad salida</label>
+              <label className="block text-sm text-stone-600 mb-1">Cantidad salida</label>
               <input
                 type="number"
                 step="0.01"
                 value={outputQuantity}
                 onChange={(e) => setOutputQuantity(e.target.value)}
-                className="w-full border border-slate-300 rounded-xl px-3 py-2"
+                className="w-full border border-stone-300 rounded-xl px-3 py-2"
               />
             </div>
             <div>
-              <label className="block text-sm text-slate-600 mb-1">Merma calculada</label>
+              <label className="block text-sm text-stone-600 mb-1">Merma calculada</label>
               <input
                 type="text"
                 disabled
                 value={`${formatNumber(wasteQty)} ${output.unit}`}
-                className="w-full border border-slate-200 bg-slate-50 rounded-xl px-3 py-2"
+                className="w-full border border-stone-200 bg-stone-50 rounded-xl px-3 py-2"
               />
             </div>
           </div>
 
           <div>
-            <label className="block text-sm text-slate-600 mb-1">Notas</label>
+            <label className="block text-sm text-stone-600 mb-1">Notas</label>
             <textarea
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
               rows={3}
-              className="w-full border border-slate-300 rounded-xl px-3 py-2"
+              className="w-full border border-stone-300 rounded-xl px-3 py-2"
             />
           </div>
 
@@ -446,14 +446,14 @@ function AdvanceStageModal({ output, nextStage, onClose, onSubmit, loading }) {
             <button
               type="button"
               onClick={onClose}
-              className="px-4 py-2 rounded-xl border border-slate-300 text-slate-700"
+              className="px-4 py-2 rounded-xl border border-stone-300 text-stone-700"
             >
               Cancelar
             </button>
             <button
               type="submit"
               disabled={!valid || loading}
-              className="px-4 py-2 rounded-xl bg-slate-900 text-white disabled:opacity-50"
+              className="px-4 py-2 rounded-xl bg-[#2f5d50] text-white disabled:opacity-50"
             >
               {loading ? 'Guardando...' : 'Confirmar'}
             </button>
@@ -529,18 +529,18 @@ function SendProcessedModal({ output, onClose, onSubmit, loading, submitError })
       <div className="bg-white w-full max-w-2xl rounded-2xl shadow-xl p-5">
         <div className="flex items-start justify-between gap-4 mb-4">
           <div>
-            <h3 className="text-lg font-semibold text-slate-800">Enviar a inventario procesado</h3>
-            <p className="text-sm text-slate-500">
+            <h3 className="text-lg font-semibold text-stone-800">Enviar a inventario procesado</h3>
+            <p className="text-sm text-stone-500">
               {output.material_name} · {output.output_lot_code}
             </p>
           </div>
-          <button type="button" onClick={onClose} className="text-slate-500 hover:text-slate-700">
+          <button type="button" onClick={onClose} className="text-stone-500 hover:text-stone-700">
             ✕
           </button>
         </div>
 
         {previewLoading ? (
-          <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-6 text-sm text-slate-500">
+          <div className="rounded-xl border border-stone-200 bg-stone-50 px-4 py-6 text-sm text-stone-500">
             Cargando liquidación del lote...
           </div>
         ) : previewError ? (
@@ -549,17 +549,17 @@ function SendProcessedModal({ output, onClose, onSubmit, loading, submitError })
           </div>
         ) : (
           <form onSubmit={handleSubmit} className="space-y-4">
-            <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 grid grid-cols-1 md:grid-cols-2 gap-3">
-              <div className="text-sm"><span className="text-slate-500">Proveedor:</span> <span className="font-medium text-slate-800">{preview?.supplierName || '—'}</span></div>
-              <div className="text-sm"><span className="text-slate-500">Lote origen:</span> <span className="font-medium text-slate-800">{preview?.sourceInternalLot || '—'}</span></div>
-              <div className="text-sm"><span className="text-slate-500">Costo original lote:</span> <span className="font-medium text-slate-800">{formatNumber(preview?.originalAmount)}</span></div>
-              <div className="text-sm"><span className="text-slate-500">Cantidad final:</span> <span className="font-medium text-slate-800">{formatNumber(preview?.finalQty)} {preview?.unit}</span></div>
-              <div className="text-sm"><span className="text-slate-500">Merma total del proceso:</span> <span className="font-medium text-slate-800">{formatNumber(preview?.processWastePercentage)}%</span></div>
-              <div className="text-sm"><span className="text-slate-500">Costo final por libra:</span> <span className="font-medium text-slate-800">{formatNumber(processedUnitCost)}</span></div>
+            <div className="rounded-xl border border-stone-200 bg-stone-50 p-4 grid grid-cols-1 md:grid-cols-2 gap-3">
+              <div className="text-sm"><span className="text-stone-500">Proveedor:</span> <span className="font-medium text-stone-800">{preview?.supplierName || '—'}</span></div>
+              <div className="text-sm"><span className="text-stone-500">Lote origen:</span> <span className="font-medium text-stone-800">{preview?.sourceInternalLot || '—'}</span></div>
+              <div className="text-sm"><span className="text-stone-500">Costo original lote:</span> <span className="font-medium text-stone-800">{formatNumber(preview?.originalAmount)}</span></div>
+              <div className="text-sm"><span className="text-stone-500">Cantidad final:</span> <span className="font-medium text-stone-800">{formatNumber(preview?.finalQty)} {preview?.unit}</span></div>
+              <div className="text-sm"><span className="text-stone-500">Merma total del proceso:</span> <span className="font-medium text-stone-800">{formatNumber(preview?.processWastePercentage)}%</span></div>
+              <div className="text-sm"><span className="text-stone-500">Costo final por libra:</span> <span className="font-medium text-stone-800">{formatNumber(processedUnitCost)}</span></div>
             </div>
 
-            <div className="rounded-xl border border-slate-200 p-4 space-y-4">
-              <div className="text-sm font-semibold text-slate-800">
+            <div className="rounded-xl border border-stone-200 p-4 space-y-4">
+              <div className="text-sm font-semibold text-stone-800">
                 Ajuste de merma aceptada por proveedor
               </div>
 
@@ -572,10 +572,10 @@ function SendProcessedModal({ output, onClose, onSubmit, loading, submitError })
                   onChange={(e) => setSettlementMode(e.target.value)}
                 />
                 <div>
-                  <div className="text-sm font-medium text-slate-800">
+                  <div className="text-sm font-medium text-stone-800">
                     Aplicar automáticamente la merma total del proceso
                   </div>
-                  <div className="text-xs text-slate-500">
+                  <div className="text-xs text-stone-500">
                     Se aplicará {formatNumber(processWastePct)}% como descuento al proveedor.
                   </div>
                 </div>
@@ -590,7 +590,7 @@ function SendProcessedModal({ output, onClose, onSubmit, loading, submitError })
                   onChange={(e) => setSettlementMode(e.target.value)}
                 />
                 <div className="w-full">
-                  <div className="text-sm font-medium text-slate-800">
+                  <div className="text-sm font-medium text-stone-800">
                     Ingresar porcentaje manual aceptado por proveedor
                   </div>
                   <div className="mt-2">
@@ -600,11 +600,11 @@ function SendProcessedModal({ output, onClose, onSubmit, loading, submitError })
                       value={manualAcceptedPct}
                       onChange={(e) => setManualAcceptedPct(e.target.value)}
                       disabled={settlementMode !== 'manual'}
-                      className="w-40 border border-slate-300 rounded-xl px-3 py-2 text-sm"
+                      className="w-40 border border-stone-300 rounded-xl px-3 py-2 text-sm"
                       placeholder="Ej. 30"
                     />
                   </div>
-                  <div className="mt-1 text-xs text-slate-500">
+                  <div className="mt-1 text-xs text-stone-500">
                     No puede ser mayor que {formatNumber(processWastePct)}%.
                   </div>
                 </div>
@@ -612,19 +612,19 @@ function SendProcessedModal({ output, onClose, onSubmit, loading, submitError })
             </div>
 
             <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4 grid grid-cols-1 md:grid-cols-2 gap-3">
-              <div className="text-sm"><span className="text-slate-600">Merma aceptada proveedor:</span> <span className="font-semibold text-slate-800">{formatNumber(acceptedPct)}%</span></div>
-              <div className="text-sm"><span className="text-slate-600">Descuento al costo:</span> <span className="font-semibold text-slate-800">{formatNumber(discountAmount)}</span></div>
-              <div className="text-sm"><span className="text-slate-600">Monto a pagar proveedor (CXP):</span> <span className="font-semibold text-slate-800">{formatNumber(payableAmount)}</span></div>
-              <div className="text-sm"><span className="text-slate-600">Costo final por libra procesada:</span> <span className="font-semibold text-slate-800">{formatNumber(processedUnitCost)}</span></div>
+              <div className="text-sm"><span className="text-stone-600">Merma aceptada proveedor:</span> <span className="font-semibold text-stone-800">{formatNumber(acceptedPct)}%</span></div>
+              <div className="text-sm"><span className="text-stone-600">Descuento al costo:</span> <span className="font-semibold text-stone-800">{formatNumber(discountAmount)}</span></div>
+              <div className="text-sm"><span className="text-stone-600">Monto a pagar proveedor (CXP):</span> <span className="font-semibold text-stone-800">{formatNumber(payableAmount)}</span></div>
+              <div className="text-sm"><span className="text-stone-600">Costo final por libra procesada:</span> <span className="font-semibold text-stone-800">{formatNumber(processedUnitCost)}</span></div>
             </div>
 
             <div>
-              <label className="block text-sm text-slate-600 mb-1">Ubicación</label>
+              <label className="block text-sm text-stone-600 mb-1">Ubicación</label>
               <input
                 type="text"
                 value={location}
                 onChange={(e) => setLocation(e.target.value)}
-                className="w-full border border-slate-300 rounded-xl px-3 py-2"
+                className="w-full border border-stone-300 rounded-xl px-3 py-2"
                 placeholder="Ej. Cuarto frío procesado"
               />
             </div>
@@ -639,7 +639,7 @@ function SendProcessedModal({ output, onClose, onSubmit, loading, submitError })
               <button
                 type="button"
                 onClick={onClose}
-                className="px-4 py-2 rounded-xl border border-slate-300 text-slate-700"
+                className="px-4 py-2 rounded-xl border border-stone-300 text-stone-700"
               >
                 Cancelar
               </button>
@@ -667,7 +667,7 @@ function SublotesTable({ rows, onAction }) {
     <div className="overflow-auto">
       <table className="min-w-full text-sm">
         <thead>
-          <tr className="text-left border-b border-slate-200">
+          <tr className="text-left border-b border-stone-200">
             <th className="py-2 pr-4">Lote / sublote</th>
             <th className="py-2 pr-4">Material</th>
             <th className="py-2 pr-4">Tipo</th>
@@ -680,8 +680,8 @@ function SublotesTable({ rows, onAction }) {
         </thead>
         <tbody>
           {rows.map((row) => (
-            <tr key={row.id} className="border-b border-slate-100">
-              <td className="py-2 pr-4 font-medium text-slate-800">{row.output_lot_code}</td>
+            <tr key={row.id} className="border-b border-stone-100">
+              <td className="py-2 pr-4 font-medium text-stone-800">{row.output_lot_code}</td>
               <td className="py-2 pr-4">{row.material_name}</td>
               <td className="py-2 pr-4">{row.output_type || 'unico'}</td>
               <td className="py-2 pr-4">{row.stage}</td>
@@ -701,12 +701,12 @@ function SublotesTable({ rows, onAction }) {
                   <button
                     type="button"
                     onClick={() => onAction(row)}
-                    className="px-3 py-1.5 rounded-lg bg-slate-900 text-white text-xs hover:bg-slate-800"
+                    className="px-3 py-1.5 rounded-lg bg-[#2f5d50] text-white text-xs hover:bg-[#264c42]"
                   >
                     {row.next_action}
                   </button>
                 ) : (
-                  <span className="text-slate-400">—</span>
+                  <span className="text-stone-400">—</span>
                 )}
               </td>
             </tr>
@@ -832,8 +832,8 @@ export default function ProcesosMpPage() {
   return (
     <div className="p-4 md:p-6 space-y-6">
       <div className="flex flex-col gap-2">
-        <h1 className="text-2xl font-bold text-slate-900">Procesos MP</h1>
-        <p className="text-slate-600">
+        <h1 className="text-2xl font-bold text-stone-900">Procesos MP</h1>
+        <p className="text-stone-600">
           Seguimiento de lotes activos en proceso. La liquidación final del costo se realiza al enviar el secado a inventario procesado.
         </p>
       </div>
@@ -851,21 +851,21 @@ export default function ProcesosMpPage() {
       ) : null}
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <div className="bg-white border border-slate-200 rounded-2xl p-4">
-          <div className="text-sm text-slate-500">MP disponible</div>
-          <div className="mt-1 text-2xl font-bold text-slate-900">{summary.inventoryLots}</div>
+        <div className="bg-white border border-stone-200 rounded-2xl p-4">
+          <div className="text-sm text-stone-500">MP disponible</div>
+          <div className="mt-1 text-2xl font-bold text-stone-900">{summary.inventoryLots}</div>
         </div>
-        <div className="bg-white border border-slate-200 rounded-2xl p-4">
-          <div className="text-sm text-slate-500">Pend. lavado</div>
-          <div className="mt-1 text-2xl font-bold text-slate-900">{summary.pendientesLavado}</div>
+        <div className="bg-white border border-stone-200 rounded-2xl p-4">
+          <div className="text-sm text-stone-500">Pend. lavado</div>
+          <div className="mt-1 text-2xl font-bold text-stone-900">{summary.pendientesLavado}</div>
         </div>
-        <div className="bg-white border border-slate-200 rounded-2xl p-4">
-          <div className="text-sm text-slate-500">Pend. secado</div>
-          <div className="mt-1 text-2xl font-bold text-slate-900">{summary.pendientesSecado}</div>
+        <div className="bg-white border border-stone-200 rounded-2xl p-4">
+          <div className="text-sm text-stone-500">Pend. secado</div>
+          <div className="mt-1 text-2xl font-bold text-stone-900">{summary.pendientesSecado}</div>
         </div>
-        <div className="bg-white border border-slate-200 rounded-2xl p-4">
-          <div className="text-sm text-slate-500">Pend. inventario</div>
-          <div className="mt-1 text-2xl font-bold text-slate-900">{summary.pendientesInventario}</div>
+        <div className="bg-white border border-stone-200 rounded-2xl p-4">
+          <div className="text-sm text-stone-500">Pend. inventario</div>
+          <div className="mt-1 text-2xl font-bold text-stone-900">{summary.pendientesInventario}</div>
         </div>
       </div>
 
@@ -874,7 +874,7 @@ export default function ProcesosMpPage() {
           type="button"
           onClick={loadData}
           disabled={loading}
-          className="px-4 py-2 rounded-xl border border-slate-300 text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+          className="px-4 py-2 rounded-xl border border-stone-300 text-stone-700 hover:bg-stone-50 disabled:opacity-50"
         >
           {loading ? 'Actualizando...' : 'Actualizar'}
         </button>

@@ -32,6 +32,9 @@ import NominaPage from './features/nomina/pages/NominaPage'
 import MarcacionPage from './features/marcacion/pages/MarcacionPage'
 import CalidadPage from './features/calidad/pages/CalidadPage'
 import ExportacionPage from './features/exportacion/pages/ExportacionPage'
+import TrazabilidadPage from './features/trazabilidad/pages/TrazabilidadPage'
+import CierresPage from './features/cierres/pages/CierresPage'
+import ConfiguracionPage from './features/configuracion/pages/ConfiguracionPage'
 
 function wrap(element) {
   return (
@@ -82,6 +85,9 @@ export default function App() {
         <Route path="/marcacion" element={wrapKiosk(<MarcacionPage />)} />
         <Route path="/calidad" element={wrap(<CalidadPage />)} />
         <Route path="/exportacion" element={wrap(<ExportacionPage />)} />
+        <Route path="/trazabilidad" element={wrap(<TrazabilidadPage />)} />
+        <Route path="/cierres" element={wrap(<CierresPage />)} />
+        <Route path="/configuracion" element={wrap(<ConfiguracionPage />)} />
 
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
