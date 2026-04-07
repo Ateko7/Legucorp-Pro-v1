@@ -13,7 +13,14 @@
       "Bash(grep -o \"\\\\.from\\('[^']*'\\)\" /c/Users/daren/legucorp-pro/src/features/nomina/services/*.js)",
       "Bash(ls -la /c/Users/daren/legucorp-pro/src/features/*/pages/)",
       "Bash(grep -r \"from\\('\" src/features/*/services/*.js)",
-      "Bash(npx vite:*)"
+      "Bash(npx vite:*)",
+      "Bash(node check_imports.js)",
+      "Bash(mv check_imports.js check_imports.cjs)",
+      "Bash(node check_imports.cjs)",
+      "Bash(xargs -I{} sh -c 'echo \"$\\(grep -c slate {} 2>/dev/null\\) {}\"')",
+      "Bash(dir \"C:\\\\Users\\\\daren\\\\.claude\\\\projects\\\\c--Users-daren-legucorp-pro\\\\memory\\\\\")",
+      "Bash(git add:*)",
+      "Bash(git push:*)"
     ]
   }
 }
