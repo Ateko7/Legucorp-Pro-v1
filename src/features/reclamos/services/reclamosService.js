@@ -13,6 +13,25 @@ async function getProfile() {
 
 function n(v) { const x = Number(v); return isNaN(x) ? 0 : x }
 
+function normalizeClaimItems(items) {
+  return (items || [])
+    .map((item) => {
+      const quantity = n(item.quantity)
+      const unitPrice = n(item.unit_price)
+      const standardCost = n(item.standard_cost)
+      return {
+        order_item_id: item.order_item_id,
+        product_presentation_id: item.product_presentation_id || null,
+        quantity,
+        unit_price: unitPrice,
+        standard_cost: standardCost,
+        amount: quantity * unitPrice,
+        sale_loss_potential: quantity * unitPrice,
+      }
+    })
+    .filter((item) => item.order_item_id && item.quantity > 0)
+}
+
 // ─── Consultas ─────────────────────────────────────────────────────────────────
 
 export async function getClaimsData() {
@@ -25,8 +44,8 @@ export async function getClaimsData() {
         id, order_number, delivery_date, status, total, is_replacement, created_at,
         clients ( id, commercial_name ),
         order_items (
-          id, quantity, quantity_packed, quantity_delivered, subtotal,
-          product_presentations ( id, code, display_name, unit )
+          id, quantity, quantity_packed, quantity_delivered, subtotal, unit_price,
+          product_presentations ( id, code, display_name, unit, standard_cost )
         )
       `)
       .eq('organization_id', profile.organization_id)
@@ -39,6 +58,10 @@ export async function getClaimsData() {
         id, order_id, claim_type, status, description, amount, cost_amount,
         resolution_type, resolution_notes, sale_loss, credit_note_value,
         replacement_order_id, created_at, resolved_at,
+        order_claim_items (
+          id, order_item_id, product_presentation_id, quantity, unit_price, standard_cost, amount, sale_loss_potential,
+          product_presentations ( id, code, display_name, unit )
+        ),
         orders!order_id ( order_number, clients ( commercial_name ) )
       `)
       .eq('organization_id', profile.organization_id)
@@ -53,8 +76,15 @@ export async function getClaimsData() {
 
 // ─── Crear reclamo ─────────────────────────────────────────────────────────────
 
-export async function createClaim(orderId, { claimType, description, amount, costAmount }) {
+export async function createClaim(orderId, { claimType, description, items = [] }) {
   const profile = await getProfile()
+  const normalizedItems = normalizeClaimItems(items)
+
+  if (!normalizedItems.length) throw new Error('Selecciona al menos un producto y unidades reclamadas')
+
+  const amount = normalizedItems.reduce((acc, item) => acc + n(item.amount), 0)
+  const costAmount = normalizedItems.reduce((acc, item) => acc + item.quantity * n(item.standard_cost), 0)
+
   const { data, error } = await supabase
     .from('order_claims')
     .insert({
@@ -69,6 +99,26 @@ export async function createClaim(orderId, { claimType, description, amount, cos
     .select()
     .single()
   if (error) throw new Error(error.message)
+
+  const { error: itemsError } = await supabase
+    .from('order_claim_items')
+    .insert(
+      normalizedItems.map((item) => ({
+        claim_id: data.id,
+        order_item_id: item.order_item_id,
+        product_presentation_id: item.product_presentation_id,
+        quantity: item.quantity,
+        unit_price: item.unit_price,
+        standard_cost: item.standard_cost,
+        amount: item.amount,
+        sale_loss_potential: item.sale_loss_potential,
+      })),
+    )
+  if (itemsError) {
+    await supabase.from('order_claims').delete().eq('id', data.id)
+    throw new Error(itemsError.message)
+  }
+
   return data
 }
 

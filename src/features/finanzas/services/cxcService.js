@@ -1,5 +1,5 @@
 import { supabase } from '../../../lib/supabase'
-import { ivaCalc } from '../../contabilidad/services/contabilidadService'
+import { ivaCalc, postAccountingEvent } from '../../contabilidad/services/contabilidadService'
 import { generateSalesCommission } from '../../vendedores/services/vendedoresService'
 
 async function getProfile() {
@@ -166,22 +166,11 @@ export async function markAsCobrado(orderId, {
     const orgId = profile.organization_id
     const { data: order } = await supabase
       .from('orders')
-      .select('total, order_number, clients(commercial_name)')
+      .select('total, order_number, client_id, clients(id, commercial_name)')
       .eq('id', orderId)
       .single()
 
     const { total } = ivaCalc(n(order?.total))
-
-    const { data: accounts } = await supabase
-      .from('accounting_accounts')
-      .select('id, code')
-      .eq('organization_id', orgId)
-      .in('code', ['1120', '1200'])
-
-    const acctMap = {}
-    ;(accounts || []).forEach((account) => {
-      acctMap[account.code] = account.id
-    })
 
     const { data: cc } = await supabase
       .from('cost_centers')
@@ -190,44 +179,27 @@ export async function markAsCobrado(orderId, {
       .eq('code', 'CC-04')
       .maybeSingle()
 
-    const bankAccountingAccountId = bankAccount.accounting_account_id || acctMap['1120']
+    const bankAccountingAccountId = bankAccount.accounting_account_id
+    if (!bankAccountingAccountId) throw new Error('La cuenta bancaria no tiene cuenta contable asociada')
 
-    if (bankAccountingAccountId && acctMap['1200']) {
-      const { data: entry } = await supabase
-        .from('journal_entries')
-        .insert({
-          organization_id: orgId,
-          entry_date: new Date().toISOString().slice(0, 10),
-          description: `Cobro Pedido #${order?.order_number} - ${order?.clients?.commercial_name}`,
-          reference_type: 'venta',
-          reference_id: orderId,
-          status: 'confirmado',
-          created_by: profile.id,
-        })
-        .select()
-        .single()
-
-      if (entry) {
-        await supabase.from('journal_entry_lines').insert([
-          {
-            entry_id: entry.id,
-            account_id: bankAccountingAccountId,
-            cost_center_id: cc?.id || null,
-            description: `Cobro ${collection_reference} en banco ${collection_bank_name} ${collection_account_number}`.trim(),
-            debit: total,
-            credit: 0,
-          },
-          {
-            entry_id: entry.id,
-            account_id: acctMap['1200'],
-            cost_center_id: cc?.id || null,
-            description: 'Cancelacion CxC',
-            debit: 0,
-            credit: total,
-          },
-        ])
-      }
-    }
+    await postAccountingEvent({
+      eventCode: 'COBRO_CLIENTE',
+      entryDate: new Date().toISOString().slice(0, 10),
+      description: `Cobro Pedido #${order?.order_number} - ${order?.clients?.commercial_name || 'Cliente'}`,
+      referenceType: 'venta',
+      referenceId: orderId,
+      sourceType: 'cxc_collection',
+      sourceId: orderId,
+      payload: {
+        total,
+        order_number: order?.order_number,
+        bank_accounting_account_id: bankAccountingAccountId,
+        admin_cost_center_id: cc?.id || null,
+        dimension_order_id: orderId,
+        dimension_client_id: order?.client_id || order?.clients?.id || null,
+        collection_reference,
+      },
+    })
   } catch (e) {
     console.warn('Asiento de cobro no generado:', e.message)
   }

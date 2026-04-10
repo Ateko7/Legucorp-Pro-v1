@@ -41,18 +41,50 @@ function NewClaimModal({ orders, onClose, onSaved }) {
   const [orderId, setOrderId] = useState('')
   const [claimType, setClaimType] = useState('calidad')
   const [description, setDescription] = useState('')
-  const [amount, setAmount] = useState('')
-  const [costAmount, setCostAmount] = useState('')
+  const [claimItemId, setClaimItemId] = useState('')
+  const [quantity, setQuantity] = useState('')
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
+
+  const selectedOrder = orders.find(o => o.id === orderId)
+  const claimableItems = (selectedOrder?.order_items || [])
+    .map(i => {
+      const maxQuantity = Math.max(0, n(i.quantity_delivered) || n(i.quantity_packed) || n(i.quantity))
+      return {
+        order_item_id: i.id,
+        product_presentation_id: i.product_presentations?.id || '',
+        display_name: i.product_presentations?.display_name || i.product_presentations?.code || `Producto ${i.id?.slice(0, 6) || ''}`,
+        unit: i.product_presentations?.unit || 'unid.',
+        max_quantity: maxQuantity,
+        unit_price: n(i.unit_price),
+        standard_cost: n(i.product_presentations?.standard_cost),
+      }
+    })
+    .filter(i => i.max_quantity > 0)
+  const selectedItem = claimableItems.find(i => i.order_item_id === claimItemId)
+  const claimedQuantity = Math.max(0, n(quantity))
+  const amount = selectedItem ? claimedQuantity * n(selectedItem.unit_price) : 0
+  const costAmount = selectedItem ? claimedQuantity * n(selectedItem.standard_cost) : 0
 
   async function handleSubmit(e) {
     e.preventDefault()
     if (!orderId) { setError('Selecciona un pedido'); return }
+    if (!selectedItem) { setError('Selecciona un producto reclamado'); return }
+    if (claimedQuantity <= 0 || claimedQuantity > n(selectedItem.max_quantity)) { setError('Ingresa una cantidad valida'); return }
     setSaving(true)
     setError('')
     try {
-      await createClaim(orderId, { claimType, description, amount, costAmount })
+      await createClaim(orderId, {
+        claimType,
+        description,
+        items: [{
+          order_item_id: selectedItem.order_item_id,
+          product_presentation_id: selectedItem.product_presentation_id,
+          quantity: claimedQuantity,
+          unit_price: selectedItem.unit_price,
+          standard_cost: selectedItem.standard_cost,
+        }],
+      })
       onSaved()
     } catch (err) {
       setError(err.message)
@@ -73,7 +105,7 @@ function NewClaimModal({ orders, onClose, onSaved }) {
 
           <label className="block">
             <span className="block mb-1 text-sm font-medium text-stone-700">Pedido *</span>
-            <select value={orderId} onChange={e => setOrderId(e.target.value)} required
+            <select value={orderId} onChange={e => { setOrderId(e.target.value); setClaimItemId(''); setQuantity('') }} required
               className="w-full rounded-2xl border border-stone-300 bg-stone-50 px-4 py-3 text-sm outline-none focus:border-[#2f5d50] focus:ring-4 focus:ring-emerald-100">
               <option value="">Selecciona un pedido</option>
               {orders.map(o => (
@@ -101,17 +133,38 @@ function NewClaimModal({ orders, onClose, onSaved }) {
 
           <div className="grid grid-cols-2 gap-4">
             <label className="block">
-              <span className="block mb-1 text-sm font-medium text-stone-700">Monto del reclamo (Q)</span>
-              <input type="number" step="0.01" min="0" value={amount} onChange={e => setAmount(e.target.value)}
-                placeholder="0.00"
-                className="w-full rounded-2xl border border-stone-300 bg-stone-50 px-4 py-3 text-sm outline-none focus:border-[#2f5d50] focus:ring-4 focus:ring-emerald-100" />
+              <span className="block mb-1 text-sm font-medium text-stone-700">Producto reclamado</span>
+              <select value={claimItemId} onChange={e => { setClaimItemId(e.target.value); setQuantity('1') }}
+                className="w-full rounded-2xl border border-stone-300 bg-stone-50 px-4 py-3 text-sm outline-none focus:border-[#2f5d50] focus:ring-4 focus:ring-emerald-100">
+                <option value="">Selecciona un producto</option>
+                {claimableItems.map(i => (
+                  <option key={i.order_item_id} value={i.order_item_id}>
+                    {i.display_name} · entregado {n(i.max_quantity).toFixed(2)} {i.unit}
+                  </option>
+                ))}
+              </select>
             </label>
             <label className="block">
-              <span className="block mb-1 text-sm font-medium text-stone-700">Costo MP perdida (Q)</span>
-              <input type="number" step="0.01" min="0" value={costAmount} onChange={e => setCostAmount(e.target.value)}
+              <span className="block mb-1 text-sm font-medium text-stone-700">Unidades reclamadas</span>
+              <input type="number" step="0.01" min="0" max={selectedItem ? n(selectedItem.max_quantity) : undefined} value={quantity} onChange={e => setQuantity(e.target.value)}
                 placeholder="0.00"
                 className="w-full rounded-2xl border border-stone-300 bg-stone-50 px-4 py-3 text-sm outline-none focus:border-[#2f5d50] focus:ring-4 focus:ring-emerald-100" />
             </label>
+          </div>
+
+          <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+            <div className="rounded-2xl border border-stone-200 bg-stone-50 px-4 py-3">
+              <div className="text-xs font-semibold uppercase tracking-[0.2em] text-stone-500">Monto reclamo</div>
+              <div className="mt-2 text-lg font-semibold text-stone-800">Q {fmt(amount)}</div>
+            </div>
+            <div className="rounded-2xl border border-stone-200 bg-stone-50 px-4 py-3">
+              <div className="text-xs font-semibold uppercase tracking-[0.2em] text-stone-500">Costo producto</div>
+              <div className="mt-2 text-lg font-semibold text-stone-800">Q {fmt(costAmount)}</div>
+            </div>
+            <div className="rounded-2xl border border-stone-200 bg-stone-50 px-4 py-3">
+              <div className="text-xs font-semibold uppercase tracking-[0.2em] text-stone-500">Venta perdida potencial</div>
+              <div className="mt-2 text-lg font-semibold text-stone-800">Q {fmt(amount)}</div>
+            </div>
           </div>
 
           <div className="flex gap-3 pt-1">
@@ -153,7 +206,7 @@ function ResolveModal({ claim, orders, onClose, onSaved }) {
         }))
       )
     }
-  }, [resolutionType, claim.order_id])
+  }, [resolutionType, claim.order_id, originalOrder])
 
   function updateReplacementItem(ppId, val) {
     setReplacementItems(prev => prev.map(i =>
@@ -428,6 +481,7 @@ export default function ReclamosPage() {
                     <div className="flex gap-4 text-xs text-stone-400 flex-wrap">
                       {n(claim.cost_amount) > 0 && <span className="text-red-500 font-medium">Costo prod.: Q {fmt(claim.cost_amount)}</span>}
                       {n(claim.amount) > 0 && <span>Costo oportunidad: Q {fmt(claim.amount)}</span>}
+                      {claim.order_claim_items?.length ? <span>{claim.order_claim_items.map(item => `${item.product_presentations?.display_name || item.product_presentations?.code || 'Producto'} x ${fmt(item.quantity)}`).join(' · ')}</span> : null}
                       {claim.status === 'cerrado' && n(claim.sale_loss) > 0 && (
                         <span className="text-red-500">Pérdida venta: Q {fmt(claim.sale_loss)}</span>
                       )}

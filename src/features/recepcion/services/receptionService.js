@@ -165,6 +165,8 @@ export async function createReception(payload) {
     unit,
     quality_notes,
     unit_cost,
+    programa_agricola_id,
+    programa_entrega_id,
   } = payload
 
   const {
@@ -239,6 +241,8 @@ export async function createReception(payload) {
     quality_notes: quality_notes?.trim() || null,
     unit_cost: Number(unit_cost || 0),
     real_cost: Number(quantity_accepted || 0) * Number(unit_cost || 0),
+    programa_agricola_id: programa_agricola_id || null,
+    programa_entrega_id: programa_entrega_id || null,
     created_by: user.id,
   }
 
@@ -259,7 +263,9 @@ export async function createReception(payload) {
       ),
       purchase_orders (
         id,
-        order_number
+        order_number,
+        programa_agricola_id,
+        programa_entrega_id
       )
     `)
     .single()
@@ -282,6 +288,8 @@ export async function createBulkReceptions(payload) {
     received_date,
     quality_notes,
     items = [],
+    programa_agricola_id,
+    programa_entrega_id,
   } = payload
 
   if (!purchase_order_id) {
@@ -373,6 +381,8 @@ export async function createBulkReceptions(payload) {
     quality_notes: item.quality_notes?.trim() || quality_notes?.trim() || null,
     unit_cost: Number(item.unit_cost || 0),
     real_cost: Number(item.quantity_accepted || 0) * Number(item.unit_cost || 0),
+    programa_agricola_id: item.programa_agricola_id || programa_agricola_id || null,
+    programa_entrega_id: item.programa_entrega_id || programa_entrega_id || null,
     created_by: user.id,
   }))
 
@@ -393,7 +403,9 @@ export async function createBulkReceptions(payload) {
       ),
       purchase_orders (
         id,
-        order_number
+        order_number,
+        programa_agricola_id,
+        programa_entrega_id
       )
     `)
 
@@ -407,12 +419,36 @@ export async function createBulkReceptions(payload) {
 }
 
 export async function releaseReception(receptionId) {
+  const { data: reception, error: receptionError } = await supabase
+    .from('material_receptions')
+    .select('id, programa_agricola_id, programa_entrega_id')
+    .eq('id', receptionId)
+    .single()
+
+  if (receptionError) {
+    throw new Error(receptionError.message || 'No se pudo obtener la recepción')
+  }
+
   const { data, error } = await supabase.rpc('release_material_reception', {
     p_reception_id: receptionId,
   })
 
   if (error) {
     throw new Error(error.message || 'No se pudo liberar el lote')
+  }
+
+  if (reception?.programa_agricola_id || reception?.programa_entrega_id) {
+    const { error: lotError } = await supabase
+      .from('material_inventory_lots')
+      .update({
+        programa_agricola_id: reception.programa_agricola_id || null,
+        programa_entrega_id: reception.programa_entrega_id || null,
+      })
+      .eq('reception_id', receptionId)
+
+    if (lotError) {
+      throw new Error(lotError.message || 'No se pudo vincular el inventario al programa agrícola')
+    }
   }
 
   return data

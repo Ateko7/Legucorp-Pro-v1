@@ -1,5 +1,28 @@
 import { supabase } from '../../../lib/supabase'
 
+function normalizeCoordinate(value, { min, max, label }) {
+  if (value === '' || value == null) return null
+  const parsed = Number(value)
+  if (Number.isNaN(parsed)) throw new Error(`${label} no es valida`)
+  if (parsed < min || parsed > max) throw new Error(`${label} esta fuera de rango`)
+  return parsed
+}
+
+function normalizeDeliveryLocation(latitudeValue, longitudeValue) {
+  const latitude = normalizeCoordinate(latitudeValue, { min: -90, max: 90, label: 'La latitud' })
+  const longitude = normalizeCoordinate(longitudeValue, { min: -180, max: 180, label: 'La longitud' })
+
+  if ((latitude == null) !== (longitude == null)) {
+    throw new Error('Debes guardar latitud y longitud juntas')
+  }
+
+  if (latitude === 0 && longitude === 0) {
+    throw new Error('Las coordenadas 0,0 no son una ubicacion valida para entrega')
+  }
+
+  return { latitude, longitude }
+}
+
 export async function getClients() {
   const { data, error } = await supabase
     .from('clients')
@@ -36,6 +59,7 @@ export async function getSalespeopleForClients() {
 }
 
 export async function createClient(payload) {
+  const deliveryLocation = normalizeDeliveryLocation(payload.delivery_latitude, payload.delivery_longitude)
   const {
     commercial_name,
     legal_name,
@@ -68,6 +92,8 @@ export async function createClient(payload) {
       legal_name: legal_name || null,
       nit: nit || null,
       main_address: main_address || null,
+      delivery_latitude: deliveryLocation.latitude,
+      delivery_longitude: deliveryLocation.longitude,
       credit_days: Number(credit_days || 0),
       main_contact: main_contact || null,
       phone: phone || null,
@@ -117,6 +143,7 @@ export async function deleteClient(id) {
 }
 
 export async function updateClient(id, payload) {
+  const deliveryLocation = normalizeDeliveryLocation(payload.delivery_latitude, payload.delivery_longitude)
   const {
     commercial_name,
     legal_name,
@@ -140,6 +167,8 @@ export async function updateClient(id, payload) {
       legal_name: legal_name || null,
       nit: nit || null,
       main_address: main_address || null,
+      delivery_latitude: deliveryLocation.latitude,
+      delivery_longitude: deliveryLocation.longitude,
       credit_days: Number(credit_days || 0),
       main_contact: main_contact || null,
       phone: phone || null,

@@ -8,6 +8,8 @@ const emptyForm = {
   legal_name: '',
   nit: '',
   main_address: '',
+  delivery_latitude: '',
+  delivery_longitude: '',
   credit_days: '',
   main_contact: '',
   phone: '',
@@ -76,6 +78,8 @@ export default function ClientsPage() {
       legal_name: client.legal_name || '',
       nit: client.nit || '',
       main_address: client.main_address || '',
+      delivery_latitude: client.delivery_latitude == null ? '' : String(client.delivery_latitude),
+      delivery_longitude: client.delivery_longitude == null ? '' : String(client.delivery_longitude),
       credit_days: String(client.credit_days ?? ''),
       main_contact: client.main_contact || '',
       phone: client.phone || '',
@@ -499,6 +503,28 @@ export default function ClientsPage() {
                   name="delivery_conditions"
                   rows={4}
                   value={form.delivery_conditions}
+                  onChange={handleChange}
+                  className="w-full rounded-2xl border border-stone-300 bg-stone-50 px-4 py-3 text-stone-700 outline-none transition focus:border-emerald-700 focus:bg-white focus:ring-4 focus:ring-emerald-100"
+                />
+              </Field>
+            </div>
+            <div className="mt-4 grid gap-4 md:grid-cols-2">
+              <Field label="Latitud de entrega">
+                <input
+                  name="delivery_latitude"
+                  type="number"
+                  step="0.0000001"
+                  value={form.delivery_latitude}
+                  onChange={handleChange}
+                  className="w-full rounded-2xl border border-stone-300 bg-stone-50 px-4 py-3 text-stone-700 outline-none transition focus:border-emerald-700 focus:bg-white focus:ring-4 focus:ring-emerald-100"
+                />
+              </Field>
+              <Field label="Longitud de entrega">
+                <input
+                  name="delivery_longitude"
+                  type="number"
+                  step="0.0000001"
+                  value={form.delivery_longitude}
                   onChange={handleChange}
                   className="w-full rounded-2xl border border-stone-300 bg-stone-50 px-4 py-3 text-stone-700 outline-none transition focus:border-emerald-700 focus:bg-white focus:ring-4 focus:ring-emerald-100"
                 />

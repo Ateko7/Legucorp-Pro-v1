@@ -10,6 +10,10 @@ export async function getPurchaseOrders() {
         name,
         phone
       ),
+      programas_agricolas (
+        id,
+        program_code
+      ),
       purchase_order_items (
         id,
         material_id,
@@ -93,6 +97,8 @@ export async function createPurchaseOrder(payload) {
     delivery_date,
     notes,
     items,
+    programa_agricola_id,
+    programa_entrega_id,
   } = payload
 
   if (!supplier_id) {
@@ -144,6 +150,8 @@ export async function createPurchaseOrder(payload) {
       delivery_date: delivery_date || null,
       status: 'abierta',
       notes: notes?.trim() || null,
+      programa_agricola_id: programa_agricola_id || null,
+      programa_entrega_id: programa_entrega_id || null,
       created_by: userId,
       cost_center_id: ccProduccion?.id || null,
     })
@@ -177,6 +185,10 @@ export async function createPurchaseOrder(payload) {
       suppliers (
         id,
         name
+      ),
+      programas_agricolas (
+        id,
+        program_code
       ),
       purchase_order_items (
         id,
@@ -217,6 +229,10 @@ export async function updatePurchaseOrderStatus(orderId, status) {
       suppliers (
         id,
         name
+      ),
+      programas_agricolas (
+        id,
+        program_code
       ),
       purchase_order_items (
         id,

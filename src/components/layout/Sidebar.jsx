@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { signOutUser } from '../../features/auth/services/authService'
 
@@ -83,6 +83,8 @@ const sections = [
     items: [
       { label: 'Órdenes de compra', path: '/ordenes-compra' },
       { label: 'Recepción', path: '/recepcion' },
+      { label: 'Programas de siembra', path: '/programas-siembra' },
+      { label: 'Programas agrícolas', path: '/programas-agricolas' },
       { label: 'Proveedores', path: '/proveedores' },
       { label: 'Materias primas', path: '/materias-primas' },
     ],
@@ -114,7 +116,7 @@ const sections = [
     key: 'logistica',
     icon: icons.logistica,
     items: [
-      { label: 'Despachos y entregas', path: '/logistica' },
+      { label: 'Rutas y costeo', path: '/logistica' },
       { label: 'Reclamos', path: '/reclamos' },
     ],
   },
@@ -127,6 +129,8 @@ const sections = [
       { label: 'Contabilidad', path: '/contabilidad' },
       { label: 'Cuentas por cobrar', path: '/cxc' },
       { label: 'Cuentas por pagar', path: '/cxp' },
+      { label: 'Flujo de caja', path: '/flujo-caja' },
+      { label: 'Caja', path: '/caja' },
       { label: 'Gastos', path: '/gastos' },
     ],
   },
@@ -153,6 +157,7 @@ const sections = [
     key: 'inteligencia',
     icon: icons.inteligencia,
     items: [
+      { label: 'Presupuesto ventas', path: '/presupuesto-ventas' },
       { label: 'Demanda MP', path: '/demanda-mp' },
       { label: 'Proyección de compras', path: '/proyeccion-compras' },
     ],
@@ -167,18 +172,13 @@ const sections = [
   },
 ]
 
-const INITIAL_OPEN = Object.fromEntries(sections.map(s => [s.key, false]))
-
 export default function Sidebar({ onClose }) {
   const location = useLocation()
   const navigate = useNavigate()
-  const [open, setOpen] = useState(INITIAL_OPEN)
+  const [openKey, setOpenKey] = useState(null)
 
   function toggle(key) {
-    setOpen(prev => {
-      const nextIsOpen = !prev[key]
-      return Object.fromEntries(sections.map(section => [section.key, section.key === key ? nextIsOpen : false]))
-    })
+    setOpenKey((prev) => (prev === key ? null : key))
   }
 
   function isActive(path) {
@@ -187,14 +187,6 @@ export default function Sidebar({ onClose }) {
 
   // Auto-open the section containing the active path
   const activeSection = sections.find(s => s.items.some(i => isActive(i.path)))
-
-  useEffect(() => {
-    if (!activeSection) return
-    setOpen(prev => {
-      if (prev[activeSection.key]) return prev
-      return Object.fromEntries(sections.map(section => [section.key, section.key === activeSection.key]))
-    })
-  }, [activeSection?.key])
 
   async function handleLogout() {
     try {
@@ -250,7 +242,7 @@ export default function Sidebar({ onClose }) {
       {/* Sections */}
       <nav className="flex-1 overflow-y-auto px-3 pb-3 pt-2 space-y-1">
         {sections.map((section) => {
-          const isOpenSection = open[section.key]
+          const isOpenSection = openKey === section.key || (openKey == null && activeSection?.key === section.key)
           const hasActive = section.items.some(i => isActive(i.path))
 
           return (

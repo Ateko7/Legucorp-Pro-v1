@@ -1,5 +1,6 @@
 import { supabase } from '../../../lib/supabase'
 import { ensureSupplierPaymentExpense } from './gastosService'
+import { postAccountingEvent } from '../../contabilidad/services/contabilidadService'
 
 function n(v) {
   const x = Number(v)
@@ -52,11 +53,6 @@ function getFileExtension(file) {
   const raw = (file?.name || '').split('.').pop()?.trim().toLowerCase()
   if (!raw) return 'pdf'
   return raw.replace(/[^a-z0-9]/g, '') || 'pdf'
-}
-
-function generateBatchId() {
-  if (typeof crypto !== 'undefined' && crypto.randomUUID) return crypto.randomUUID()
-  return `batch-${Date.now()}-${Math.random().toString(16).slice(2)}`
 }
 
 const SUPPLIER_TAX_REGIMES = {
@@ -165,21 +161,28 @@ async function createSupplierInvoiceJournalEntry({ row, profile, breakdown }) {
     throw new Error('Catálogo contable incompleto para generar la CxP del proveedor')
   }
 
-  const { data: entry, error: entryError } = await supabase
-    .from('journal_entries')
-    .insert({
-      organization_id: profile.organization_id,
-      entry_date: row.invoice_date || new Date().toISOString().slice(0, 10),
-      description: `Factura proveedor ${row.suppliers?.name || ''} ${row.invoice_number || ''}`.trim(),
-      reference_type: 'cxp_factura',
-      reference_id: row.id,
-      status: 'confirmado',
-      created_by: profile.id,
-    })
-    .select()
-    .single()
+  return postAccountingEvent({
+    eventCode: 'FACTURA_PROVEEDOR',
+    entryDate: row.invoice_date || new Date().toISOString().slice(0, 10),
+    description: `Factura proveedor ${row.suppliers?.name || ''} ${row.invoice_number || ''}`.trim(),
+    referenceType: 'cxp_factura',
+    referenceId: row.id,
+    sourceType: 'supplier_accounts_payable',
+    sourceId: row.id,
+    payload: {
+      subtotal: breakdown.invoice_subtotal_amount,
+      iva: breakdown.invoice_iva_amount,
+      net_payable: breakdown.net_payable_amount,
+      withholding: breakdown.withholding_amount,
+      invoice_number: row.invoice_number || '',
+      supplier_name: row.suppliers?.name || 'Proveedor',
+      inventory_account_id: accountMap['1400'],
+      dimension_supplier_id: row.supplier_id || row.suppliers?.id || null,
+      dimension_lot_id: row.processed_inventory_lot_id || null,
+    },
+  })
 
-  if (entryError) throw new Error(entryError.message)
+  /*
 
   const lines = [
     {
@@ -225,6 +228,7 @@ async function createSupplierInvoiceJournalEntry({ row, profile, breakdown }) {
   if (linesError) throw new Error(linesError.message)
 
   return entry.id
+  */
 }
 
 export async function uploadSupplierInvoice(file, cxpId) {
@@ -621,50 +625,25 @@ if (!paymentReceiptFile) {
   }
 
   try {
-    const orgId = profile.organization_id
-    const { data: accounts } = await supabase
-      .from('accounting_accounts')
-      .select('id, code')
-      .eq('organization_id', orgId)
-      .in('code', ['2100', '1120'])
+    const bankAccountingAccountId = bankAccount.accounting_account_id
+    if (!bankAccountingAccountId) throw new Error('La cuenta bancaria no tiene cuenta contable asociada')
 
-    const acctMap = {}
-    ;(accounts || []).forEach((a) => { acctMap[a.code] = a.id })
-
-    if (acctMap['2100'] && acctMap['1120']) {
-      const { data: entry } = await supabase
-        .from('journal_entries')
-        .insert({
-          organization_id: orgId,
-          entry_date: new Date().toISOString().slice(0, 10),
-          description: `Pago multiple CxP proveedor - Boleta ${paymentReference} - ${cxpRows[0]?.suppliers?.name || ''}`.trim(),
-          reference_type: 'compra',
-          reference_id: batch.id,
-          status: 'confirmado',
-          created_by: profile.id,
-        })
-        .select()
-        .single()
-
-      if (entry) {
-        await supabase.from('journal_entry_lines').insert([
-          {
-            entry_id: entry.id,
-            account_id: acctMap['2100'],
-            description: 'Cancelacion CxP proveedor',
-            debit: totalPaid,
-            credit: 0,
-          },
-          {
-            entry_id: entry.id,
-            account_id: bankAccount.accounting_account_id || acctMap['1120'],
-            description: 'Pago en banco',
-            debit: 0,
-            credit: totalPaid,
-          },
-        ])
-      }
-    }
+    await postAccountingEvent({
+      eventCode: 'PAGO_PROVEEDOR',
+      entryDate: new Date().toISOString().slice(0, 10),
+      description: `Pago multiple CxP proveedor - Boleta ${paymentReference} - ${cxpRows[0]?.suppliers?.name || ''}`.trim(),
+      referenceType: 'compra',
+      referenceId: batch.id,
+      sourceType: 'supplier_payment_batch',
+      sourceId: batch.id,
+      payload: {
+        total_paid: totalPaid,
+        supplier_name: cxpRows[0]?.suppliers?.name || 'Proveedor',
+        payment_reference: paymentReference,
+        bank_accounting_account_id: bankAccountingAccountId,
+        dimension_supplier_id: supplierId || null,
+      },
+    })
   } catch (e) {
     console.warn('Asiento de pago CxP no generado:', e.message)
   }

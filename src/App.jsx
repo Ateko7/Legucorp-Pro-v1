@@ -21,12 +21,17 @@ import ProcesosMpPage from './features/produccion/pages/ProcesosMpPage'
 import PedidosPage from './features/pedidos/pages/PedidosPage'
 import DemandaMpPage from './features/demanda/pages/DemandaMpPage'
 import ProyeccionComprasPage from './features/proyeccion/pages/ProyeccionComprasPage'
+import ProgramasAgricolasPage from './features/programasAgricolas/pages/ProgramasAgricolasPage'
+import ProgramasSiembraPage from './features/programasSiembra/pages/ProgramasSiembraPage'
+import PresupuestoVentasPage from './features/presupuestoVentas/pages/PresupuestoVentasPage'
 import LogisticaPage from './features/logistica/pages/LogisticaPage'
 import ReclamosPage from './features/reclamos/pages/ReclamosPage'
 import ContabilidadPage from './features/contabilidad/pages/ContabilidadPage'
 import CxCPage from './features/finanzas/pages/CxCPage'
 import CxPPage from './features/finanzas/pages/CxPPage'
 import GastosPage from './features/finanzas/pages/GastosPage'
+import CajaPage from './features/finanzas/pages/CajaPage'
+import FlujoCajaPage from './features/finanzas/pages/FlujoCajaPage'
 import CotizacionesPage from './features/cotizaciones/pages/CotizacionesPage'
 import VendedoresPage from './features/vendedores/pages/VendedoresPage'
 import NominaPage from './features/nomina/pages/NominaPage'
@@ -75,11 +80,16 @@ export default function App() {
         <Route path="/pedidos" element={wrap(<PedidosPage />)} />
         <Route path="/demanda-mp" element={wrap(<DemandaMpPage />)} />
         <Route path="/proyeccion-compras" element={wrap(<ProyeccionComprasPage />)} />
+        <Route path="/presupuesto-ventas" element={wrap(<PresupuestoVentasPage />)} />
+        <Route path="/programas-agricolas" element={wrap(<ProgramasAgricolasPage />)} />
+        <Route path="/programas-siembra" element={wrap(<ProgramasSiembraPage />)} />
         <Route path="/logistica" element={wrap(<LogisticaPage />)} />
         <Route path="/reclamos" element={wrap(<ReclamosPage />)} />
         <Route path="/contabilidad" element={wrap(<ContabilidadPage />)} />
         <Route path="/cxc" element={wrap(<CxCPage />)} />
         <Route path="/cxp" element={wrap(<CxPPage />)} />
+        <Route path="/caja" element={wrap(<CajaPage />)} />
+        <Route path="/flujo-caja" element={wrap(<FlujoCajaPage />)} />
         <Route path="/gastos" element={wrap(<GastosPage />)} />
         <Route path="/cotizaciones" element={wrap(<CotizacionesPage />)} />
         <Route path="/vendedores" element={wrap(<VendedoresPage />)} />

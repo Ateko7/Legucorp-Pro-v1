@@ -1,4 +1,5 @@
 import { supabase } from '../../../lib/supabase'
+import { postAccountingEvent } from '../../contabilidad/services/contabilidadService'
 
 function n(v) {
   const x = Number(v)
@@ -103,52 +104,32 @@ async function createExpensePaymentEntryWithBank({ expense, profile }) {
     throw new Error('Catalogo de cuentas incompleto para registrar el pago del gasto')
   }
 
-  const { data: entry, error: entryError } = await supabase
-    .from('journal_entries')
-    .insert({
-      organization_id: profile.organization_id,
-      entry_date: expense.paid_at?.slice(0, 10) || expense.expense_date,
-      description: `Gasto pagado: ${expense.description}`,
-      reference_type: 'gasto',
-      reference_id: expense.id,
-      status: 'confirmado',
-      created_by: profile.id,
-    })
-    .select()
-    .single()
-
-  if (entryError) throw new Error(entryError.message)
-
-  const { error: linesError } = await supabase.from('journal_entry_lines').insert([
-    {
-      entry_id: entry.id,
-      account_id: accountMap[expenseAccountCode],
-      cost_center_id: expense.cost_center_id,
+  const entryId = await postAccountingEvent({
+    eventCode: 'GASTO_OPERATIVO',
+    entryDate: expense.paid_at?.slice(0, 10) || expense.expense_date,
+    description: `Gasto pagado: ${expense.description}`,
+    referenceType: 'gasto',
+    referenceId: expense.id,
+    sourceType: 'expense',
+    sourceId: expense.id,
+    payload: {
+      amount: n(expense.amount),
       description: expense.description,
-      debit: n(expense.amount),
-      credit: 0,
+      expense_account_id: accountMap[expenseAccountCode],
+      bank_accounting_account_id: bankAccountCodeId,
+      cost_center_id: expense.cost_center_id || null,
     },
-    {
-      entry_id: entry.id,
-      account_id: bankAccountCodeId,
-      cost_center_id: expense.cost_center_id,
-      description: 'Pago en banco',
-      debit: 0,
-      credit: n(expense.amount),
-    },
-  ])
-
-  if (linesError) throw new Error(linesError.message)
+  })
 
   await supabase
     .from('expenses')
-    .update({ journal_entry_id: entry.id })
+    .update({ journal_entry_id: entryId })
     .eq('id', expense.id)
 
-  return entry.id
+  return entryId
 }
 
-async function createExpensePaymentEntry({ expense, profile }) {
+async function _createExpensePaymentEntry({ expense, profile }) {
   if (expense.journal_entry_id) return expense.journal_entry_id
 
   const { expenseAccountCode, accountMap } = await ensureExpensePaymentAccounts(
@@ -160,49 +141,29 @@ async function createExpensePaymentEntry({ expense, profile }) {
     throw new Error('Catálogo de cuentas incompleto para registrar el pago del gasto')
   }
 
-  const { data: entry, error: entryError } = await supabase
-    .from('journal_entries')
-    .insert({
-      organization_id: profile.organization_id,
-      entry_date: expense.paid_at?.slice(0, 10) || expense.expense_date,
-      description: `Gasto pagado: ${expense.description}`,
-      reference_type: 'gasto',
-      reference_id: expense.id,
-      status: 'confirmado',
-      created_by: profile.id,
-    })
-    .select()
-    .single()
-
-  if (entryError) throw new Error(entryError.message)
-
-  const { error: linesError } = await supabase.from('journal_entry_lines').insert([
-    {
-      entry_id: entry.id,
-      account_id: accountMap[expenseAccountCode],
-      cost_center_id: expense.cost_center_id,
+  const entryId = await postAccountingEvent({
+    eventCode: 'GASTO_OPERATIVO',
+    entryDate: expense.paid_at?.slice(0, 10) || expense.expense_date,
+    description: `Gasto pagado: ${expense.description}`,
+    referenceType: 'gasto',
+    referenceId: expense.id,
+    sourceType: 'expense',
+    sourceId: expense.id,
+    payload: {
+      amount: n(expense.amount),
       description: expense.description,
-      debit: n(expense.amount),
-      credit: 0,
+      expense_account_id: accountMap[expenseAccountCode],
+      bank_accounting_account_id: accountMap['1120'],
+      cost_center_id: expense.cost_center_id || null,
     },
-    {
-      entry_id: entry.id,
-      account_id: accountMap['1120'],
-      cost_center_id: expense.cost_center_id,
-      description: 'Pago en banco',
-      debit: 0,
-      credit: n(expense.amount),
-    },
-  ])
-
-  if (linesError) throw new Error(linesError.message)
+  })
 
   await supabase
     .from('expenses')
-    .update({ journal_entry_id: entry.id })
+    .update({ journal_entry_id: entryId })
     .eq('id', expense.id)
 
-  return entry.id
+  return entryId
 }
 
 export async function getGastos(dateFrom, dateTo) {

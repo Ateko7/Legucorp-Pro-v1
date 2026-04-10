@@ -41,7 +41,10 @@ select
   coalesce(max(sap.paid_at)::date, current_date),
   coalesce(sum(coalesce(sap.paid_amount, sap.net_payable_amount, sap.payable_amount, 0)), 0),
   null,
-  max(sap.paid_by),
+  (
+    array_agg(sap.paid_by order by sap.paid_at desc nulls last)
+    filter (where sap.paid_by is not null)
+  )[1],
   coalesce(max(sap.paid_at), now()),
   coalesce(max(sap.updated_at), now())
 from public.supplier_accounts_payable sap

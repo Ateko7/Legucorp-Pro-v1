@@ -1,4 +1,5 @@
 import { supabase } from '../../../lib/supabase'
+import { postAccountingEvent } from '../../contabilidad/services/contabilidadService'
 
 async function getProfile() {
   const { data: { user } } = await supabase.auth.getUser()
@@ -140,6 +141,25 @@ export async function generateSalesCommission(orderId) {
 
   // 5. Asiento contable: DR 6100 Gastos Comerciales / CR 2100 Comisiones por pagar
   try {
+    const entryId = await postAccountingEvent({
+      eventCode: 'COMISION_VENDEDOR',
+      entryDate: expense.expense_date,
+      description: `Comision ${salesperson.name} - Pedido #${order.order_number}`,
+      referenceType: 'comision',
+      referenceId: expense.id,
+      sourceType: 'expense',
+      sourceId: expense.id,
+      payload: {
+        commission,
+        description: expense.description,
+        cost_center_id: ccId,
+        dimension_order_id: orderId,
+        dimension_client_id: order.clients?.id || null,
+      },
+    })
+
+    await supabase.from('expenses').update({ journal_entry_id: entryId }).eq('id', expense.id)
+    /*
     const { data: accounts } = await supabase
       .from('accounting_accounts')
       .select('id, code')
@@ -173,6 +193,7 @@ export async function generateSalesCommission(orderId) {
         await supabase.from('expenses').update({ journal_entry_id: entry.id }).eq('id', expense.id)
       }
     }
+    */
   } catch (e) {
     console.warn('Asiento de comisión no generado:', e.message)
   }
