@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { signOutUser } from '../../features/auth/services/authService'
 import { hasModuleAccess } from '../../features/auth/services/moduleAccess'
@@ -216,6 +216,14 @@ export default function Sidebar({ onClose, profile = null }) {
     .filter((section) => section.items.length > 0)
 
   const activeSection = visibleSections.find((section) => section.items.some((item) => isActive(item.path)))
+  const previousPathRef = useRef(location.pathname)
+
+  useEffect(() => {
+    if (previousPathRef.current === location.pathname) return
+
+    previousPathRef.current = location.pathname
+    setOpenKey(activeSection?.key ?? null)
+  }, [activeSection?.key, location.pathname])
 
   async function handleLogout() {
     try {
@@ -281,7 +289,7 @@ export default function Sidebar({ onClose, profile = null }) {
 
       <nav className="flex-1 space-y-1 overflow-y-auto px-3 pb-3 pt-2">
         {visibleSections.map((section) => {
-          const isOpenSection = openKey === section.key || (openKey == null && activeSection?.key === section.key)
+          const isOpenSection = openKey === section.key
           const hasActive = section.items.some((item) => isActive(item.path))
 
           return (
