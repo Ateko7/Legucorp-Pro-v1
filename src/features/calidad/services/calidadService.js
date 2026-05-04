@@ -41,7 +41,7 @@ export async function getConfiguracion() {
 
 export async function saveConfiguracion(payload) {
   const { orgId } = await getAuth()
-  const { id, created_at, ...campos } = payload
+  const { id: _id, created_at: _created_at, ...campos } = payload
   const { data, error } = await supabase
     .from('configuracion_muestreo')
     .upsert(
@@ -219,8 +219,6 @@ export async function getDashboardCalidad() {
   const { orgId } = await getAuth()
   const hoy     = new Date().toISOString().slice(0, 10)
   const hace30d = new Date(Date.now() - 29 * 86400000).toISOString().slice(0, 10)
-  const hace14d = new Date(Date.now() - 13 * 86400000).toISOString().slice(0, 10)
-
   const [inspecHoyRes, hist30Res, riesgoRes, bloqRes] = await Promise.allSettled([
     supabase
       .from('inspecciones_calidad')

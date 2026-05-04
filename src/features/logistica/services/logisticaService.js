@@ -1219,6 +1219,15 @@ export async function completeRouteStop({ route_id, ruta_pedido_id, delivery_ite
 
   if (stopUpdateError) throw new Error(stopUpdateError.message)
 
+  if (result.allDelivered) {
+    const { error: bridgeError } = await supabase.rpc('enqueue_intercompany_delivery_confirmation', {
+      p_order_id: routeOrder.order_id,
+      p_delivery_id: result.deliveryId,
+    })
+
+    if (bridgeError) throw new Error(bridgeError.message)
+  }
+
   const nextOrder = route.ruta_pedidos.find((row) => n(row.sequence_no) > n(routeOrder.sequence_no) && row.status !== STOP_STATUS.OMITIDO)
 
   if (nextOrder) {

@@ -1,4 +1,5 @@
 import { supabase } from '../../../lib/supabase'
+import { MODULE_DEFINITIONS, getAllowedModules } from './moduleAccess'
 
 /**
  * Inicia sesión con email y contraseña
@@ -79,7 +80,13 @@ export async function getMyProfile() {
 }
 
 export function getHomePathForProfile(profile) {
-  return profile?.role === 'operario' ? '/marcacion' : '/'
+  if (profile?.role === 'operario') return '/marcacion'
+
+  const allowedModules = getAllowedModules(profile)
+  if (allowedModules.includes('dashboard')) return '/'
+
+  const firstAllowed = MODULE_DEFINITIONS.find((module) => allowedModules.includes(module.key) && module.paths?.[0])
+  return firstAllowed?.paths?.[0] || '/'
 }
 
 export async function getOperatorSetupStatus(profileParam = null) {

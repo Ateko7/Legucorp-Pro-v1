@@ -94,8 +94,8 @@ function printLabels({ order, org }) {
 <head>
 <meta charset="UTF-8"/>
 <title>Etiquetas — ${lotCode}</title>
-<script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.6/dist/JsBarcode.all.min.js"><\/script>
-<script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"><\/script>
+<script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.6/dist/JsBarcode.all.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body { background: #fff; }
@@ -168,7 +168,7 @@ ${labelHtml}
     }
     setTimeout(function() { window.print(); }, 600);
   };
-<\/script>
+</script>
 </body>
 </html>`
 
@@ -661,14 +661,14 @@ function NuevaOrdenModal({ presentations, processedLots, recipes, org, onClose, 
     if (selectedPresentation) setSelectedLots({})
   }, [selectedPresentation, runDate])
 
-  function getLotsForMaterial(materialId) {
+  const getLotsForMaterial = useCallback((materialId) => {
     return processedLots.filter((l) => l.material_id === materialId)
-  }
+  }, [processedLots])
 
-  function getSelectedQty(materialId) {
+  const getSelectedQty = useCallback((materialId) => {
     const ids = selectedLots[materialId] || []
     return getLotsForMaterial(materialId).filter((l) => ids.includes(l.id)).reduce((acc, l) => acc + numberOrZero(l.available_quantity), 0)
-  }
+  }, [getLotsForMaterial, selectedLots])
 
   function toggleLot(materialId, lotId) {
     setSelectedLots((prev) => {
@@ -677,7 +677,7 @@ function NuevaOrdenModal({ presentations, processedLots, recipes, org, onClose, 
     })
   }
 
-  const recipeCovered = useMemo(() => (requirements.perMaterial || []).every((req) => numberOrZero(getSelectedQty(req.material_id)) >= numberOrZero(req.required_lb)), [requirements, selectedLots, processedLots])
+  const recipeCovered = useMemo(() => (requirements.perMaterial || []).every((req) => numberOrZero(getSelectedQty(req.material_id)) >= numberOrZero(req.required_lb)), [requirements, getSelectedQty])
 
   const expirationDate = useMemo(() => {
     if (!selectedPresentation?.shelf_life_days || !runDate) return runDate || '—'

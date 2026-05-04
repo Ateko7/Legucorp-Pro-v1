@@ -125,7 +125,7 @@ export async function getOperativoDashboard() {
     if (!acc[id]) acc[id] = { name: l.materials?.common_name, code: l.materials?.code, minimum: n(l.materials?.minimum_stock), unit: l.unit, stock: 0 }
     acc[id].stock += n(l.available_quantity); return acc
   }, {})
-  const mpItems = Object.values(mpMap).map(m => ({ ...m, alert: m.minimum > 0 && m.stock <= m.minimum })).sort((a, b) => a.alert ? -1 : 1)
+  const mpItems = Object.values(mpMap).map(m => ({ ...m, alert: m.minimum > 0 && m.stock <= m.minimum })).sort((a, b) => Number(b.alert) - Number(a.alert))
 
   // ── Revenue por día ────────────────────────────────────────────────────────
   const revOrders = revenueByDayRes.status === 'fulfilled' ? revenueByDayRes.value.data || [] : []

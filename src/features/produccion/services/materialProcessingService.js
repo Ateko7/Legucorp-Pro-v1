@@ -20,10 +20,6 @@ function round2(v) {
   return Math.round(numberOrZero(v) * 100) / 100
 }
 
-function ensureRequired(v, name) {
-  if (!v && v !== 0) throw new Error(`${name} es requerido`)
-}
-
 async function getProfile() {
   const { data } = await supabase.auth.getUser()
   const { data: profile } = await supabase
@@ -74,11 +70,8 @@ export async function createInitialProcessRun({
     .single()
 
   if (startStage === STAGES.DESHOJE) {
-    let total = 0
-
     for (const o of outputs) {
       const qty = numberOrZero(o.output_quantity)
-      total += qty
 
       await supabase.from('material_process_stage_outputs').insert({
         organization_id: profile.organization_id,
@@ -197,8 +190,6 @@ export async function advanceOutputToNextStage({
    PREVIEW COSTEO
 ===================================================== */
 export async function getOutputSettlementPreview(outputId) {
-  const profile = await getProfile()
-
   const { data: output } = await supabase
     .from('material_process_stage_outputs')
     .select(`

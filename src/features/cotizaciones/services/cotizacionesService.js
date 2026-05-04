@@ -11,6 +11,109 @@ async function getProfile() {
 }
 
 function n(v) { const x = Number(v); return isNaN(x) ? 0 : x }
+function s(v) { return String(v ?? '').trim() }
+function normalizeText(v) {
+  return s(v).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+}
+function normalizeDigits(v) {
+  return s(v).replace(/\D+/g, '')
+}
+
+function buildClientPayloadFromProspect(prospect, orgId, userId) {
+  return {
+    organization_id:      orgId,
+    commercial_name:      prospect.commercial_name,
+    legal_name:           prospect.legal_name || null,
+    nit:                  prospect.nit || null,
+    main_address:         prospect.commercial_address || null,
+    main_contact:         prospect.contact_name || null,
+    phone:                prospect.phone || null,
+    email:                prospect.email || null,
+    channel:              prospect.channel || 'directo',
+    credit_days:          prospect.credit_days || 0,
+    delivery_conditions:  prospect.logistics_notes || null,
+    status:               'activo',
+    created_by:           userId,
+  }
+}
+
+async function findExistingProspectRecord(payload, organizationId) {
+  const { data, error } = await supabase
+    .from('prospects')
+    .select('id, commercial_name, nit, email, phone, status, converted_client_id')
+    .eq('organization_id', organizationId)
+
+  if (error) throw new Error(error.message)
+
+  const prospects = data || []
+  const nit = normalizeDigits(payload.nit)
+  const email = normalizeText(payload.email)
+  const phone = normalizeDigits(payload.phone)
+  const commercialName = normalizeText(payload.commercial_name)
+
+  if (nit) {
+    const match = prospects.find((item) => normalizeDigits(item.nit) === nit)
+    if (match) return match
+  }
+
+  if (email) {
+    const match = prospects.find((item) => normalizeText(item.email) === email)
+    if (match) return match
+  }
+
+  if (phone) {
+    const match = prospects.find((item) => normalizeDigits(item.phone) === phone)
+    if (match) return match
+  }
+
+  if (commercialName) {
+    return prospects.find((item) => normalizeText(item.commercial_name) === commercialName) || null
+  }
+
+  return null
+}
+
+async function findExistingClientRecord(payload, organizationId) {
+  const { data, error } = await supabase
+    .from('clients')
+    .select('id, commercial_name, legal_name, nit, email, phone, status')
+    .eq('organization_id', organizationId)
+
+  if (error) throw new Error(error.message)
+
+  const clients = data || []
+  const nit = normalizeDigits(payload.nit)
+  const email = normalizeText(payload.email)
+  const phone = normalizeDigits(payload.phone)
+  const commercialName = normalizeText(payload.commercial_name)
+  const legalName = normalizeText(payload.legal_name)
+
+  if (nit) {
+    const match = clients.find((item) => normalizeDigits(item.nit) === nit)
+    if (match) return match
+  }
+
+  if (email) {
+    const match = clients.find((item) => normalizeText(item.email) === email)
+    if (match) return match
+  }
+
+  if (phone) {
+    const match = clients.find((item) => normalizeDigits(item.phone) === phone)
+    if (match) return match
+  }
+
+  if (commercialName) {
+    const match = clients.find((item) => normalizeText(item.commercial_name) === commercialName)
+    if (match) return match
+  }
+
+  if (legalName) {
+    return clients.find((item) => normalizeText(item.legal_name) === legalName) || null
+  }
+
+  return null
+}
 
 // ─── Clientes (para selector) ─────────────────────────────────────────────────
 
@@ -63,6 +166,8 @@ export async function getProspects() {
 
 export async function createProspect(payload) {
   const profile = await getProfile()
+  const existing = await findExistingProspectRecord(payload, profile.organization_id)
+  if (existing) return existing
   const { data, error } = await supabase
     .from('prospects')
     .insert({ ...payload, organization_id: profile.organization_id, created_by: profile.id })
@@ -135,15 +240,27 @@ export async function createQuote({ header, items, prospectPayload }) {
   const orgId   = profile.organization_id
 
   // Crear prospecto si viene inline
+  let clientId = header.client_id || null
   let prospectId = header.prospect_id || null
-  if (!header.client_id && prospectPayload) {
-    const { data: p, error: pErr } = await supabase
-      .from('prospects')
-      .insert({ ...prospectPayload, organization_id: orgId, created_by: profile.id })
-      .select('id')
-      .single()
-    if (pErr) throw new Error(pErr.message)
-    prospectId = p.id
+  if (!clientId && prospectPayload) {
+    const existingClient = await findExistingClientRecord(prospectPayload, orgId)
+    if (existingClient) {
+      clientId = existingClient.id
+      prospectId = null
+    } else if (!prospectId) {
+      const existingProspect = await findExistingProspectRecord(prospectPayload, orgId)
+      if (existingProspect) {
+        prospectId = existingProspect.id
+      } else {
+        const { data: p, error: pErr } = await supabase
+          .from('prospects')
+          .insert({ ...prospectPayload, organization_id: orgId, created_by: profile.id })
+          .select('id')
+          .single()
+        if (pErr) throw new Error(pErr.message)
+        prospectId = p.id
+      }
+    }
   }
 
   // Generar número de cotización
@@ -157,7 +274,7 @@ export async function createQuote({ header, items, prospectPayload }) {
     .insert({
       organization_id:    orgId,
       quote_number:       quoteNum,
-      client_id:          header.client_id || null,
+      client_id:          clientId,
       prospect_id:        prospectId,
       quote_date:         header.quote_date,
       valid_until:        header.valid_until,
@@ -305,39 +422,33 @@ export async function convertProspectToClient(prospectId, orgId, userId) {
     .from('prospects')
     .select('*')
     .eq('id', prospectId)
+    .eq('organization_id', orgId)
     .single()
   if (pErr) throw new Error(pErr.message)
   if (p.status === 'convertido' && p.converted_client_id) return p.converted_client_id
 
-  const { data: client, error: cErr } = await supabase
-    .from('clients')
-    .insert({
-      organization_id:      orgId,
-      commercial_name:      p.commercial_name,
-      legal_name:           p.legal_name   || null,
-      nit:                  p.nit          || null,
-      main_address:         p.commercial_address || null,
-      main_contact:         p.contact_name || null,
-      phone:                p.phone        || null,
-      email:                p.email        || null,
-      channel:              p.channel      || 'directo',
-      credit_days:          p.credit_days  || 0,
-      delivery_conditions:  p.logistics_notes || null,
-      status:               'activo',
-      created_by:           userId,
-    })
-    .select('id')
-    .single()
-  if (cErr) throw new Error(cErr.message)
+  const existingClient = await findExistingClientRecord(p, orgId)
+  let clientId = existingClient?.id || null
+
+  if (!clientId) {
+    const { data: client, error: cErr } = await supabase
+      .from('clients')
+      .insert(buildClientPayloadFromProspect(p, orgId, userId))
+      .select('id')
+      .single()
+    if (cErr) throw new Error(cErr.message)
+    clientId = client.id
+  }
 
   // Marcar prospecto como convertido
-  await supabase.from('prospects').update({
+  const { error: updateError } = await supabase.from('prospects').update({
     status:              'convertido',
-    converted_client_id: client.id,
+    converted_client_id: clientId,
     converted_at:        new Date().toISOString(),
   }).eq('id', prospectId)
+  if (updateError) throw new Error(updateError.message)
 
-  return client.id
+  return clientId
 }
 
 // ─── Guardar precios acordados ────────────────────────────────────────────────

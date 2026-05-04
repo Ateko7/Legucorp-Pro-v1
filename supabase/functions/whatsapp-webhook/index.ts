@@ -120,7 +120,7 @@ Deno.serve(async (req) => {
         messages: [
           {
             role: 'user',
-            content: `Eres el asistente de pedidos de LegucorPro, empresa de vegetales procesados.
+            content: `Eres el asistente de pedidos de Legucorp Pro, empresa de vegetales procesados.
 
 Mensaje de WhatsApp del cliente (${from}):
 "${text}"

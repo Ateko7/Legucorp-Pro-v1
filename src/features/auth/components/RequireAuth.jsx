@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { Navigate, useLocation } from 'react-router-dom'
 import { supabase } from '../../../lib/supabase'
 import { getHomePathForProfile, getMyProfile } from '../services/authService'
+import { canAccessPath } from '../services/moduleAccess'
 
 export default function RequireAuth({ children, allowedRoles = null, blockedRoles = null, redirectTo = null }) {
   const location = useLocation()
@@ -68,8 +69,9 @@ export default function RequireAuth({ children, allowedRoles = null, blockedRole
   const role = profile?.role || null
   const isBlocked = Array.isArray(blockedRoles) && role && blockedRoles.includes(role)
   const isAllowed = !Array.isArray(allowedRoles) || !role || allowedRoles.includes(role)
+  const hasPathAccess = canAccessPath(profile, location.pathname)
 
-  if (isBlocked || !isAllowed) {
+  if (isBlocked || !isAllowed || !hasPathAccess) {
     return <Navigate to={redirectTo || getHomePathForProfile(profile)} replace state={{ from: location }} />
   }
 

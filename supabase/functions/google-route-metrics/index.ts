@@ -1,7 +1,15 @@
+import { createClient } from 'npm:@supabase/supabase-js@2'
+
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 }
+
+const supabase = createClient(
+  Deno.env.get('SUPABASE_URL')!,
+  Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
+  { auth: { persistSession: false, autoRefreshToken: false } },
+)
 
 type StopInput = {
   label?: string
@@ -27,6 +35,21 @@ function parseDurationSeconds(raw: string | null | undefined) {
   const match = String(raw).match(/([\d.]+)s$/)
   if (!match) return 0
   return Math.round(Number(match[1]) || 0)
+}
+
+function bearerToken(req: Request) {
+  const auth = req.headers.get('Authorization') || ''
+  return auth.startsWith('Bearer ') ? auth.slice('Bearer '.length) : null
+}
+
+async function requireAuthenticatedUser(req: Request) {
+  const token = bearerToken(req)
+  if (!token) throw new Error('Authorization bearer token is required')
+
+  const { data, error } = await supabase.auth.getUser(token)
+  if (error || !data.user) throw new Error('Invalid authorization token')
+
+  return data.user
 }
 
 async function geocodeAddress(address: string, apiKey: string) {
@@ -89,6 +112,9 @@ Deno.serve(async (req) => {
     if (req.method !== 'POST') {
       return jsonResponse({ error: 'Metodo no permitido' }, 405)
     }
+
+    stage = 'auth'
+    await requireAuthenticatedUser(req)
 
     stage = 'api_key'
     const apiKey = Deno.env.get('GOOGLE_MAPS_API_KEY') || ''
@@ -182,13 +208,14 @@ Deno.serve(async (req) => {
     })
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Error desconocido'
+    const status = message.includes('Authorization') || message.includes('authorization') ? 401 : 500
     return jsonResponse(
       {
         error: message,
         stage,
         stack: err instanceof Error ? err.stack : null,
       },
-      500,
+      status,
     )
   }
 })

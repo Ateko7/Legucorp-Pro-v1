@@ -53,13 +53,92 @@ function n(v) {
   return isNaN(x) ? 0 : x
 }
 
+function isIntercompanyOrder(order) {
+  return order?.tipo_pedido === 'intercompany' ||
+    !!order?.intercompany_partner_id ||
+    !!order?.clients?.is_intercompany ||
+    !!order?.clients?.intercompany_partner_id
+}
+
+function buildIntercompanyDispatchPayload(order, newTotal, costs = {}) {
+  const items = order.order_items || []
+  const packings = order.order_packings || []
+  const freightCost = n(costs.freight_cost)
+  const insuranceCost = n(costs.insurance_cost)
+
+  const payloadItems = items.map((item) => {
+    const itemPackings = packings.filter((packing) => packing.order_item_id === item.id)
+    if (itemPackings.length === 0) {
+      throw new Error(`El item ${item.product_presentations?.code || item.id} no tiene lotes empacados`)
+    }
+
+    const qty = itemPackings.reduce((sum, packing) => sum + n(packing.quantity_packed), 0)
+    if (qty <= 0) {
+      throw new Error(`El item ${item.product_presentations?.code || item.id} no tiene cantidad empacada`)
+    }
+
+    const weightedCost = itemPackings.reduce((sum, packing) => {
+      const lot = packing.finished_inventory_lots
+      const unitCost = n(lot?.unit_cost) || n(item.product_presentations?.standard_cost)
+      return sum + n(packing.quantity_packed) * unitCost
+    }, 0) / qty
+
+    return {
+      source_line_id: item.id,
+      sku: item.product_presentations?.code,
+      description: item.product_presentations?.display_name,
+      qty,
+      unit_cost: weightedCost,
+      lots: itemPackings.map((packing) => {
+        const lot = packing.finished_inventory_lots
+        return {
+          lot_id: lot?.id,
+          lot_code: lot?.finished_lot_code || lot?.id,
+          qty: n(packing.quantity_packed),
+          expiry_date: lot?.expiration_date || null,
+        }
+      }),
+    }
+  })
+
+  if (payloadItems.some((item) => !item.sku)) {
+    throw new Error('Todos los productos intercompany deben tener SKU/codigo de presentacion')
+  }
+
+  return {
+    currency: order.moneda || order.clients?.moneda_default || 'GTQ',
+    freight_cost: freightCost,
+    insurance_cost: insuranceCost,
+    logistics_cost_total: freightCost + insuranceCost,
+    invoice_data: {
+      order_id: order.id,
+      order_number: order.order_number,
+      fel_document_id: order.fel_document_id || null,
+      customer_name: order.clients?.commercial_name || null,
+      customer_nit: order.clients?.nit || null,
+      total: newTotal,
+    },
+    items: payloadItems,
+  }
+}
+
 // ─── Clientes ────────────────────────────────────────────────────────────────
+
+function assertOrderIsPacked(order) {
+  const items = order?.order_items || []
+  if (!items.length) throw new Error('El pedido no tiene lineas para despachar')
+
+  const pendingItems = items.filter((item) => n(item.quantity_packed) < n(item.quantity))
+  if (pendingItems.length) {
+    throw new Error('No se puede despachar: el pedido debe estar completamente empacado')
+  }
+}
 
 export async function getClients() {
   const profile = await getProfile()
   const { data, error } = await supabase
     .from('clients')
-    .select('id, commercial_name, legal_name, nit, main_address, phone, email, credit_days, es_exportacion, facturar_por_sombrilla, moneda_default, pais')
+    .select('id, commercial_name, legal_name, nit, main_address, phone, email, credit_days, es_exportacion, facturar_por_sombrilla, moneda_default, pais, is_intercompany, intercompany_partner_id')
     .eq('organization_id', profile.organization_id)
     .eq('status', 'activo')
     .order('commercial_name')
@@ -73,7 +152,7 @@ export async function getPresentations() {
   const profile = await getProfile()
   const { data, error } = await supabase
     .from('product_presentations')
-    .select('id, code, display_name, net_weight, unit, suggested_price')
+    .select('id, code, display_name, net_weight, unit, suggested_price, standard_cost')
     .eq('organization_id', profile.organization_id)
     .eq('status', 'activo')
     .order('display_name')
@@ -128,16 +207,17 @@ export async function getOrderById(orderId) {
   const { data, error } = await supabase
     .from('orders')
     .select(`
-      id, order_number, delivery_date, status, total, channel, channel_reference, notes, created_at, updated_at, moneda, tipo_cambio, es_exportacion,
-      clients ( id, commercial_name, legal_name, nit, main_address, phone, email, credit_days, facturar_por_sombrilla, pais, moneda_default ),
+      id, order_number, delivery_date, status, total, channel, channel_reference, notes, created_at, updated_at, moneda, tipo_cambio, es_exportacion, tipo_pedido, intercompany_partner_id, fel_document_id,
+      clients ( id, commercial_name, legal_name, nit, main_address, phone, email, credit_days, facturar_por_sombrilla, pais, moneda_default, is_intercompany, intercompany_partner_id ),
+      fel_documents ( id, tipo_documento, serie, numero, dte_uuid, estado_fel, total, fecha_emision ),
       order_items (
         id, product_presentation_id, quantity, unit_price, subtotal, quantity_packed,
-        product_presentations ( id, code, display_name, net_weight, unit )
+        product_presentations ( id, code, display_name, net_weight, unit, standard_cost )
       ),
       order_packings (
         id, quantity_packed, packed_at,
         order_item_id,
-        finished_inventory_lots ( id, finished_lot_code, available_quantity, expiration_date )
+        finished_inventory_lots ( id, finished_lot_code, available_quantity, expiration_date, unit_cost )
       )
     `)
     .eq('id', orderId)
@@ -267,27 +347,7 @@ export async function packOrderItem({ orderId, orderItemId, lotAssignments }) {
       packed_by: profile.id,
     })
     if (packError) throw new Error(packError.message)
-
-    // Descontar del lote
-    const newQty = n(lot.available_quantity) - qty
-    const { error: lotUpdateError } = await supabase
-      .from('finished_inventory_lots')
-      .update({ available_quantity: newQty, status: newQty <= 0 ? 'agotado' : 'parcial' })
-      .eq('id', finishedLotId)
-    if (lotUpdateError) throw new Error(lotUpdateError.message)
   }
-
-  // Actualizar quantity_packed acumulado en el ítem
-  const { data: item } = await supabase
-    .from('order_items')
-    .select('quantity_packed')
-    .eq('id', orderItemId)
-    .single()
-  const { error: itemUpdateError } = await supabase
-    .from('order_items')
-    .update({ quantity_packed: n(item?.quantity_packed) + totalQty })
-    .eq('id', orderItemId)
-  if (itemUpdateError) throw new Error(itemUpdateError.message)
 
   // Si todos los ítems están completamente empacados → status empacado
   const { data: allItems } = await supabase
@@ -302,7 +362,10 @@ export async function packOrderItem({ orderId, orderItemId, lotAssignments }) {
 
 // ─── Despachar pedido (recalcula total por cantidad empacada real) ─────────────
 
-export async function dispatchOrder(orderId) {
+export async function dispatchOrder(orderId, costs = {}) {
+  const order = await getOrderById(orderId)
+  assertOrderIsPacked(order)
+
   const { data: items, error: itemsError } = await supabase
     .from('order_items')
     .select('quantity_packed, unit_price')
@@ -318,6 +381,20 @@ export async function dispatchOrder(orderId) {
     .update({ status: ORDER_STATUS.DESPACHADO, total: newTotal })
     .eq('id', orderId)
   if (error) throw new Error(error.message)
+
+  if (isIntercompanyOrder(order)) {
+    const profile = await getProfile()
+    const payload = buildIntercompanyDispatchPayload(order, newTotal, costs)
+    const { error: bridgeError } = await supabase.rpc('create_intercompany_dispatch_event', {
+      p_dispatch_id: orderId,
+      p_payload: payload,
+      p_source_company: 'GT',
+      p_target_company: 'SV',
+      p_organization_id: profile.organization_id,
+    })
+
+    if (bridgeError) throw new Error(bridgeError.message || 'No se pudo crear el evento intercompany')
+  }
 }
 
 // ─── Actualizar estado del pedido ─────────────────────────────────────────────
@@ -328,6 +405,41 @@ export async function updateOrderStatus(orderId, status) {
     .update({ status })
     .eq('id', orderId)
   if (error) throw new Error(error.message)
+}
+
+export async function facturarOrder(orderId) {
+  const {
+    data: { session },
+  } = await supabase.auth.getSession()
+
+  if (!session?.access_token) {
+    throw new Error('Sesion no disponible. Vuelve a iniciar sesion antes de facturar.')
+  }
+
+  const supabaseUrl = import.meta.env.VITE_SUPABASE_URL
+  const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY
+
+  const res = await fetch(`${supabaseUrl}/functions/v1/certify-fel-order`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      apikey: supabaseKey,
+      Authorization: `Bearer ${session.access_token}`,
+    },
+    body: JSON.stringify({ order_id: orderId }),
+  })
+
+  let data = {}
+  try {
+    data = await res.json()
+  } catch {
+    data = { error: await res.text() }
+  }
+
+  if (!res.ok) throw new Error(data?.error || `Error ${res.status} al certificar la factura FEL`)
+  if (data?.error) throw new Error(data.error)
+
+  return data
 }
 
 // ─── Generar PDF (datos) ──────────────────────────────────────────────────────
@@ -413,7 +525,7 @@ export function printOrderPDF(order) {
 <body>
   <div class="header">
     <div>
-      <div class="brand">LegucorPro</div>
+      <div class="brand">Legucorp Pro</div>
       <p style="color:#78716c;font-size:12px;margin-top:4px;">Documento previo a facturación</p>
     </div>
     <div class="meta">
@@ -460,7 +572,7 @@ export function printOrderPDF(order) {
 
   <div class="footer">
     <span>Pedido #${order.order_number} · Canal: ${order.channel || 'manual'}</span>
-    <span>LegucorPro ERP · ${new Date().toLocaleString('es-GT')}</span>
+    <span>Legucorp Pro ERP · ${new Date().toLocaleString('es-GT')}</span>
   </div>
 </body>
 </html>`

@@ -405,3 +405,5 @@ s3_secret_key = "env(S3_SECRET_KEY)"
 verify_jwt = false
 [functions.google-route-metrics]
 verify_jwt = false
+[functions.certify-fel-order]
+verify_jwt = false

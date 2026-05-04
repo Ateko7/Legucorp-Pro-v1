@@ -179,7 +179,7 @@ function AcceptModal({ quote, onClose, onDone }) {
 
 // ─── ListView ─────────────────────────────────────────────────────────────────
 
-function ListView({ onNew, onEdit, onView, onRefresh }) {
+function ListView({ onNew, onEdit, onView }) {
   const [quotes,  setQuotes]  = useState([])
   const [stats,   setStats]   = useState({})
   const [loading, setLoading] = useState(true)

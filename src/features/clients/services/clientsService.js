@@ -23,6 +23,17 @@ function normalizeDeliveryLocation(latitudeValue, longitudeValue) {
   return { latitude, longitude }
 }
 
+async function replaceClientAddresses(clientId, addresses) {
+  const { error } = await supabase.rpc('replace_client_addresses', {
+    p_client_id: clientId,
+    p_addresses: addresses,
+  })
+
+  if (error) {
+    throw new Error(error.message || 'No se pudieron actualizar las direcciones del cliente')
+  }
+}
+
 export async function getClients() {
   const { data, error } = await supabase
     .from('clients')
@@ -116,18 +127,13 @@ export async function createClient(payload) {
     const addressRows = addresses
       .filter((a) => a.address_line?.trim())
       .map((a, index) => ({
-        client_id: client.id,
         address_label: a.address_label || null,
         address_line: a.address_line,
         is_default: !!a.is_default || index === 0,
       }))
 
     if (addressRows.length > 0) {
-      const { error: addrError } = await supabase
-        .from('client_addresses')
-        .insert(addressRows)
-
-      if (addrError) throw new Error(addrError.message || 'Cliente creado, pero fallaron las direcciones')
+      await replaceClientAddresses(client.id, addressRows)
     }
   }
 
@@ -186,20 +192,13 @@ export async function updateClient(id, payload) {
 
   if (error) throw new Error(error.message || 'No se pudo actualizar el cliente')
 
-  // Reemplazar direcciones
-  await supabase.from('client_addresses').delete().eq('client_id', id)
-
   const addressRows = addresses
     .filter((a) => a.address_line?.trim())
     .map((a, index) => ({
-      client_id: id,
       address_label: a.address_label || null,
       address_line: a.address_line,
       is_default: !!a.is_default || index === 0,
     }))
 
-  if (addressRows.length > 0) {
-    const { error: addrError } = await supabase.from('client_addresses').insert(addressRows)
-    if (addrError) throw new Error(addrError.message || 'Cliente actualizado, pero fallaron las direcciones')
-  }
+  await replaceClientAddresses(id, addressRows)
 }

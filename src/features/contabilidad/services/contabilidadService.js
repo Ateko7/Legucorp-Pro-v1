@@ -66,6 +66,7 @@ const DEFAULT_ACCOUNTING_EVENT_TYPES = [
   { code: 'TRANSFERENCIA_BANCARIA', name: 'Transferencia bancaria', module: 'tesoreria', description: 'Movimiento entre cuentas bancarias', default_posting_mode: 'automatico', requires_review: false },
   { code: 'GASTO_OPERATIVO', name: 'Gasto operativo', module: 'gastos', description: 'Registro de gasto con centro de costo', default_posting_mode: 'borrador', requires_review: true },
   { code: 'COMISION_VENDEDOR', name: 'Comision de vendedor', module: 'ventas', description: 'Provision de comision comercial', default_posting_mode: 'automatico', requires_review: false },
+  { code: 'PAGO_COMISION_VENDEDOR', name: 'Pago de comision de vendedor', module: 'ventas', description: 'Cancelacion de comision comercial por pagar', default_posting_mode: 'automatico', requires_review: false },
   { code: 'CIERRE_PROCESO_MP', name: 'Cierre proceso MP', module: 'produccion', description: 'Liquidacion de costo en inventario procesado', default_posting_mode: 'borrador', requires_review: true },
   { code: 'EMPAQUE_TERMINADO', name: 'Empaque terminado', module: 'produccion', description: 'Transferencia de costo a lote terminado', default_posting_mode: 'borrador', requires_review: true },
   { code: 'RUTA_COSTEADA', name: 'Ruta costeada', module: 'logistica', description: 'Costeo logistico real por ruta y pedido', default_posting_mode: 'borrador', requires_review: true },
@@ -143,6 +144,17 @@ const DEFAULT_POSTING_TEMPLATES = [
     ],
   },
   {
+    code: 'TPL-CIERRE-PROCESO-MP',
+    name: 'Gasto de produccion por proveedor pagado',
+    event_code: 'CIERRE_PROCESO_MP',
+    posting_mode: 'automatico',
+    description: 'Reclasificacion de inventario a gasto de produccion despues del pago al proveedor',
+    lines: [
+      { line_no: 1, side: 'debit', account_mode: 'static_code', account_value: '6200', amount_mode: 'payload', amount_value: 'amount', cost_center_mode: 'payload_cost_center_id', cost_center_value: 'cost_center_id', tax_code: 'GASTO_PROD', description_template: '{{description}}' },
+      { line_no: 2, side: 'credit', account_mode: 'payload_account_id', account_value: 'inventory_account_id', amount_mode: 'payload', amount_value: 'amount', cost_center_mode: 'none', tax_code: 'NO_FISCAL', description_template: 'Reclasificacion inventario proceso {{internal_lot}}' },
+    ],
+  },
+  {
     code: 'TPL-COMISION-VENDEDOR',
     name: 'Provision comision vendedor',
     event_code: 'COMISION_VENDEDOR',
@@ -151,6 +163,17 @@ const DEFAULT_POSTING_TEMPLATES = [
     lines: [
       { line_no: 1, side: 'debit', account_mode: 'static_code', account_value: '6100', amount_mode: 'payload', amount_value: 'commission', cost_center_mode: 'payload_cost_center_id', cost_center_value: 'cost_center_id', tax_code: 'GASTO_COM', description_template: '{{description}}' },
       { line_no: 2, side: 'credit', account_mode: 'static_code', account_value: '2100', amount_mode: 'payload', amount_value: 'commission', cost_center_mode: 'payload_cost_center_id', cost_center_value: 'cost_center_id', tax_code: 'NO_FISCAL', description_template: 'Comision por pagar' },
+    ],
+  },
+  {
+    code: 'TPL-PAGO-COMISION-VENDEDOR',
+    name: 'Pago de comision de vendedor',
+    event_code: 'PAGO_COMISION_VENDEDOR',
+    posting_mode: 'automatico',
+    description: 'Pago por lote de comisiones comerciales',
+    lines: [
+      { line_no: 1, side: 'debit', account_mode: 'static_code', account_value: '2100', amount_mode: 'payload', amount_value: 'total_amount', cost_center_mode: 'payload_cost_center_id', cost_center_value: 'cost_center_id', tax_code: 'NO_FISCAL', description_template: 'Pago comision {{salesperson_name}}' },
+      { line_no: 2, side: 'credit', account_mode: 'payload_account_id', account_value: 'bank_accounting_account_id', amount_mode: 'payload', amount_value: 'total_amount', cost_center_mode: 'payload_cost_center_id', cost_center_value: 'cost_center_id', tax_code: 'NO_FISCAL', description_template: 'Boleta {{payment_reference}}' },
     ],
   },
 ]
@@ -266,6 +289,11 @@ async function ensurePostingTemplates(orgId) {
       throw new Error(ruleUpsertError.message)
     }
   }
+}
+
+export async function ensureAccountingTemplatesCurrent(orgId) {
+  await ensureAccountingEventTypes(orgId)
+  await ensurePostingTemplates(orgId)
 }
 
 async function ensureAccountingPeriods(orgId, fiscalYear = new Date().getFullYear()) {
@@ -2212,6 +2240,7 @@ function mapMovementSourceLabel(sourceType) {
   if (sourceType === 'bank_transfer_in') return 'Transferencia recibida'
   if (sourceType === 'cash_box_funding') return 'Fondeo de caja'
   if (sourceType === 'supplier_payment_batch') return 'Pago CxP'
+  if (sourceType === 'sales_commission_payment_batch') return 'Pago comisiones'
   if (sourceType === 'expense') return 'Pago gasto'
   if (sourceType === 'cxc_collection') return 'Cobro CxC'
   return sourceType
@@ -2341,6 +2370,52 @@ async function syncSupplierPaymentBatchMovements(profile, bankAccount) {
       receipt_file_url: row.receipt_file_url,
       description: `Boleta de pago proveedor ${row.suppliers?.name || ''}`.trim(),
       source_type: 'supplier_payment_batch',
+      source_id: row.id,
+      created_by: row.created_by || profile.id,
+      updated_at: new Date().toISOString(),
+    }))
+
+  await upsertBankMovements(rows)
+}
+
+async function syncSalesCommissionPaymentBatchMovements(profile, bankAccount) {
+  const { data, error } = await supabase
+    .from('sales_commission_payment_batches')
+    .select(`
+      id,
+      organization_id,
+      payment_reference,
+      payment_date,
+      total_amount,
+      receipt_file_url,
+      debit_bank_name,
+      debit_account_number,
+      bank_account_id,
+      created_by,
+      salespeople ( name )
+    `)
+    .eq('organization_id', profile.organization_id)
+
+  if (error) throw new Error(error.message)
+
+  const rows = (data || [])
+    .filter((row) =>
+      row.bank_account_id === bankAccount.id ||
+      (!row.bank_account_id &&
+        row.debit_bank_name === bankAccount.bank_name &&
+        row.debit_account_number === bankAccount.account_number)
+    )
+    .map((row) => ({
+      organization_id: profile.organization_id,
+      bank_account_id: bankAccount.id,
+      movement_date: row.payment_date,
+      movement_type: 'debito',
+      debit_amount: n(row.total_amount),
+      credit_amount: 0,
+      document_number: row.payment_reference,
+      receipt_file_url: row.receipt_file_url,
+      description: `Boleta comision ${row.salespeople?.name || ''}`.trim(),
+      source_type: 'sales_commission_payment_batch',
       source_id: row.id,
       created_by: row.created_by || profile.id,
       updated_at: new Date().toISOString(),
@@ -2538,6 +2613,7 @@ export async function getBankReconciliationData(bankAccountId, dateFrom, dateTo)
     syncOpeningBalanceMovement(profile, bankAccount),
     syncBankTransferMovements(profile, bankAccount),
     syncSupplierPaymentBatchMovements(profile, bankAccount),
+    syncSalesCommissionPaymentBatchMovements(profile, bankAccount),
     syncExpenseMovements(profile, bankAccount),
     syncCollectionMovements(profile, bankAccount),
   ])

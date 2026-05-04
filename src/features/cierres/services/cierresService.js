@@ -17,12 +17,6 @@ async function getProfile() {
 
 function isoDate(d) { return d instanceof Date ? d.toISOString().slice(0, 10) : d }
 
-function addDays(dateStr, days) {
-  const d = new Date(dateStr + 'T00:00:00')
-  d.setDate(d.getDate() + days)
-  return isoDate(d)
-}
-
 // ─── Date range helpers ────────────────────────────────────────────────────────
 
 export function rangoParaDiario(fecha) {
@@ -228,7 +222,7 @@ async function consolidarCalidad(orgId, inicio, fin) {
 
 // ─── Alert generation ──────────────────────────────────────────────────────────
 
-function generarAlertas({ produccion, ventas, costos, calidad, tipo_periodo }) {
+function generarAlertas({ produccion, ventas, costos, calidad }) {
   const alertas = []
 
   // Producción 0 con costo laboral

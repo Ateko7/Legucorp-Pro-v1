@@ -621,7 +621,6 @@ function TabMuestreos() {
 
   const pendientes  = inspeccionesHoy.filter(i => i.status === 'pendiente')
   const completadas = inspeccionesHoy.filter(i => i.status === 'completada')
-  const canceladas  = inspeccionesHoy.filter(i => i.status === 'cancelada')
 
   if (loading) return <Spinner />
 

@@ -37,7 +37,7 @@ export default function LoginPage() {
         {/* Brand */}
         <div className="mb-8 flex flex-col items-center text-center">
           <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-white shadow-md overflow-hidden">
-            <img src="/Logo Leume Impresiones CMYK (1).png" alt="Legucorp" className="h-full w-full object-contain" />
+            <img src="/legucorp-logo.png" alt="Legucorp" className="h-full w-full object-contain" />
           </div>
           <h1 className="text-2xl font-bold tracking-tight text-stone-900">Legucorp Pro</h1>
           <p className="mt-1 text-sm text-stone-500">Inicia sesión para continuar</p>

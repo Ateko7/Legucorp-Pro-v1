@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState, useCallback } from 'react'
 import { useRealtimeRefresh } from '../../../hooks/useRealtimeRefresh'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import {
   getOrders,
   getOrderById,
@@ -10,6 +10,7 @@ import {
   createOrder,
   updateOrder,
   updateOrderStatus,
+  facturarOrder,
   packOrderItem,
   dispatchOrder,
   printOrderPDF,
@@ -224,7 +225,6 @@ function OrderForm({ initial, clients, presentations, onSave, onCancel, saving }
 
           <div className="space-y-3">
             {items.map((item, idx) => {
-              const pres = presentations.find((p) => p.id === item.product_presentation_id)
               return (
                 <div key={item._key} className="grid gap-3 rounded-2xl border border-stone-200 bg-stone-50 p-4 md:grid-cols-[2fr_1fr_1fr_auto]">
                   <label className="block">
@@ -461,6 +461,69 @@ function PackItemModal({ item, inventory, onPack, onClose, saving }) {
 
 // ─── Vista detalle del pedido ─────────────────────────────────────────────────
 
+function DispatchCostsModal({ order, onDispatch, onClose, saving }) {
+  const [freightCost, setFreightCost] = useState('')
+  const [insuranceCost, setInsuranceCost] = useState('')
+  const freight = n(freightCost)
+  const insurance = n(insuranceCost)
+
+  function submit(event) {
+    event.preventDefault()
+    onDispatch({ freight_cost: freight, insurance_cost: insurance })
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 p-4 md:items-center">
+      <div className="w-full max-w-md rounded-lg bg-white shadow-xl">
+        <div className="border-b border-stone-200 px-5 py-4">
+          <h3 className="text-base font-semibold text-stone-900">Costos intercompany</h3>
+          <p className="mt-1 text-sm text-stone-500">Pedido #{order?.order_number}</p>
+        </div>
+        <form onSubmit={submit} className="space-y-4 p-5">
+          <div className="grid gap-4 md:grid-cols-2">
+            <label className="block">
+              <span className="mb-1 block text-sm font-medium text-stone-700">Flete</span>
+              <input
+                type="number"
+                min="0"
+                step="0.01"
+                value={freightCost}
+                onChange={(event) => setFreightCost(event.target.value)}
+                placeholder="0.00"
+                className="w-full rounded-lg border border-stone-300 bg-white px-3 py-2 text-sm text-stone-800 outline-none focus:border-[#2f5d50] focus:ring-2 focus:ring-emerald-100"
+              />
+            </label>
+            <label className="block">
+              <span className="mb-1 block text-sm font-medium text-stone-700">Seguro</span>
+              <input
+                type="number"
+                min="0"
+                step="0.01"
+                value={insuranceCost}
+                onChange={(event) => setInsuranceCost(event.target.value)}
+                placeholder="0.00"
+                className="w-full rounded-lg border border-stone-300 bg-white px-3 py-2 text-sm text-stone-800 outline-none focus:border-[#2f5d50] focus:ring-2 focus:ring-emerald-100"
+              />
+            </label>
+          </div>
+          <div className="flex justify-between rounded-lg border border-stone-200 bg-stone-50 px-4 py-3 text-sm">
+            <span className="text-stone-600">Total costos</span>
+            <span className="font-semibold text-stone-900">Q {fmt(freight + insurance)}</span>
+          </div>
+          <div className="flex justify-end gap-3">
+            <button type="button" onClick={onClose} className="rounded-lg border border-stone-300 px-4 py-2 text-sm font-semibold text-stone-700 hover:bg-stone-50">
+              Cancelar
+            </button>
+            <button type="submit" disabled={saving} className="rounded-lg bg-[#2f5d50] px-4 py-2 text-sm font-semibold text-white hover:bg-[#264c42] disabled:opacity-50">
+              {saving ? 'Procesando...' : 'Generar despacho'}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  )
+}
+
 function OrderDetailView({ orderId, inventory, onBack, onStatusChange, onEdit }) {
   const navigate = useNavigate()
   const [order, setOrder] = useState(null)
@@ -471,6 +534,7 @@ function OrderDetailView({ orderId, inventory, onBack, onStatusChange, onEdit })
   const [showCancelConfirm, setShowCancelConfirm] = useState(false)
   const [facturaExport, setFacturaExport] = useState(null)
   const [showFacturaPreview, setShowFacturaPreview] = useState(false)
+  const [showDispatchCosts, setShowDispatchCosts] = useState(false)
 
   const loadOrder = useCallback(async () => {
     setLoading(true)
@@ -515,11 +579,32 @@ function OrderDetailView({ orderId, inventory, onBack, onStatusChange, onEdit })
     }
   }
 
-  async function handleDispatch() {
+  async function handleDispatch(costs = {}) {
     setSaving(true)
     setError('')
     try {
-      await dispatchOrder(orderId)
+      await dispatchOrder(orderId, costs)
+      setShowDispatchCosts(false)
+      await loadOrder()
+      onStatusChange()
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  async function handleFacturar() {
+    setSaving(true)
+    setError('')
+    try {
+      await facturarOrder(orderId)
+      try {
+        const { generateSalesEntry } = await import('../../contabilidad/services/contabilidadService')
+        await generateSalesEntry(orderId)
+      } catch (e) {
+        console.warn('Asiento contable no generado:', e.message)
+      }
       await loadOrder()
       onStatusChange()
     } catch (err) {
@@ -559,6 +644,10 @@ function OrderDetailView({ orderId, inventory, onBack, onStatusChange, onEdit })
   const status = order.status
   const currentIdx = STATUS_FLOW.indexOf(status)
   const isEditable = !['en_logistica', 'entregado', 'cobrado'].includes(status)
+  const isIntercompany = order.tipo_pedido === 'intercompany' ||
+    !!order.intercompany_partner_id ||
+    !!order.clients?.is_intercompany ||
+    !!order.clients?.intercompany_partner_id
 
   // Chequeo de inventario
   const inventoryOk = items.every((item) => {
@@ -618,7 +707,7 @@ function OrderDetailView({ orderId, inventory, onBack, onStatusChange, onEdit })
           {/* Despacho parcial: disponible desde CONFIRMADO si hay algo empacado */}
           {status === ORDER_STATUS.CONFIRMADO && items.some(i => n(i.quantity_packed) > 0) && (
             <button
-              onClick={handleDispatch}
+              onClick={() => isIntercompany ? setShowDispatchCosts(true) : handleDispatch()}
               disabled={saving}
               className="rounded-2xl bg-purple-500 px-4 py-2.5 text-sm font-semibold text-white shadow-md hover:bg-purple-600 transition disabled:opacity-50"
             >
@@ -628,7 +717,7 @@ function OrderDetailView({ orderId, inventory, onBack, onStatusChange, onEdit })
 
           {status === ORDER_STATUS.EMPACADO && (
             <button
-              onClick={handleDispatch}
+              onClick={() => isIntercompany ? setShowDispatchCosts(true) : handleDispatch()}
               disabled={saving}
               className="rounded-2xl bg-purple-600 px-4 py-2.5 text-sm font-semibold text-white shadow-md hover:bg-purple-700 transition disabled:opacity-50"
             >
@@ -657,11 +746,11 @@ function OrderDetailView({ orderId, inventory, onBack, onStatusChange, onEdit })
                 )
               )}
               <button
-                onClick={() => handleStatusChange(ORDER_STATUS.FACTURADO)}
+                onClick={handleFacturar}
                 disabled={saving}
                 className="rounded-2xl bg-sky-600 px-4 py-2.5 text-sm font-semibold text-white shadow-md hover:bg-sky-700 transition disabled:opacity-50"
               >
-                {saving ? 'Procesando...' : 'Marcar como facturado'}
+                {saving ? 'Facturando...' : 'Facturar'}
               </button>
             </>
           )}
@@ -873,6 +962,15 @@ function OrderDetailView({ orderId, inventory, onBack, onStatusChange, onEdit })
             setFacturaExport(factura)
             setShowFacturaPreview(false)
           }}
+        />
+      )}
+
+      {showDispatchCosts && (
+        <DispatchCostsModal
+          order={order}
+          onDispatch={handleDispatch}
+          onClose={() => setShowDispatchCosts(false)}
+          saving={saving}
         />
       )}
     </div>
@@ -1214,6 +1312,7 @@ function QueueView({ orders, loading, inventory, presentations, onNew, onSelect,
 // ─── Página principal ─────────────────────────────────────────────────────────
 
 export default function PedidosPage() {
+  const [searchParams, setSearchParams] = useSearchParams()
   const [view, setView] = useState('queue') // 'queue' | 'nuevo' | 'detalle' | 'editar'
   const [orders, setOrders] = useState([])
   const [clients, setClients] = useState([])
@@ -1245,6 +1344,13 @@ export default function PedidosPage() {
 
   useEffect(() => { loadAll() }, [])
   useRealtimeRefresh(['orders', 'order_items'], loadAll)
+
+  useEffect(() => {
+    const orderId = searchParams.get('order')
+    if (!orderId) return
+    setSelectedOrderId(orderId)
+    setView('detalle')
+  }, [searchParams])
 
   async function handleCreate(payload) {
     setSaving(true)
@@ -1286,6 +1392,7 @@ export default function PedidosPage() {
   }
 
   function goToDetail(orderId) {
+    setSearchParams({ order: orderId })
     setSelectedOrderId(orderId)
     setView('detalle')
   }
@@ -1342,7 +1449,7 @@ export default function PedidosPage() {
           <OrderDetailView
             orderId={selectedOrderId}
             inventory={inventory}
-            onBack={() => setView('queue')}
+            onBack={() => { setSearchParams({}); setView('queue') }}
             onStatusChange={loadAll}
             onEdit={goToEdit}
           />

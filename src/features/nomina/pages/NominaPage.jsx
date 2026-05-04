@@ -2,7 +2,7 @@ import { useEffect, useState, useMemo, useCallback } from 'react'
 import { useRealtimeRefresh } from '../../../hooks/useRealtimeRefresh'
 import Modal from '../../../components/ui/Modal'
 import {
-  getEmpleados, getEmpleado, createEmpleado, updateEmpleado, darBajaEmpleado,
+  getEmpleados, createEmpleado, updateEmpleado,
   getHistorialSalarial, registrarCambioSalarial,
   getParametros, saveParametros,
   getCostCentersForNomina,
@@ -15,14 +15,14 @@ import {
   getMarcaciones, getMarcacionHoy, registrarEntrada, registrarSalida,
   upsertMarcacion, aprobarMarcacion, deleteMarcacion,
   getResumenAsistencia, getJornada, saveJornada,
-  calcularHorasDia, calcularHorasTeoricas,
+  calcularHorasTeoricas,
 } from '../services/marcacionesService'
 import { getSedes, createSede, updateSede, deleteSede } from '../services/sedesService'
-import { getKpiTendencia, getKpiResumen, getAlertas, calcularYPersistirKpi, getKpiHoy } from '../services/costoLaboralService'
+import { getKpiResumen, getAlertas, calcularYPersistirKpi, getKpiHoy } from '../services/costoLaboralService'
 import { getBankAccounts } from '../../contabilidad/services/contabilidadService'
 import {
   getVacaciones, createVacaciones, updateVacacionesEstado, getSaldoVacaciones,
-  getIncapacidades, createIncapacidad, updateIncapacidadEstado,
+  getIncapacidades, createIncapacidad,
   getPrestamos, createPrestamo, getMovimientosPrestamo,
   getAnticipos, createAnticipo,
   getLiquidaciones, calcularLiquidacion, aprobarLiquidacion, pagarLiquidacion,
@@ -247,7 +247,9 @@ function TabEmpleados() {
 
   async function openHistorial(emp) {
     setSelectedEmp(emp)
-    try { const h = await getHistorialSalarial(emp.id); setHistorial(h) } catch {}
+    try { const h = await getHistorialSalarial(emp.id); setHistorial(h) } catch {
+      // El historial salarial es auxiliar; no bloquea la ficha del empleado.
+    }
     setCambioForm({ salario_base: String(emp.salario_base_actual), bonificacion_incentivo: String(emp.bonificacion_incentivo_actual), tipo_pago: emp.tipo_pago, afiliado_igss: emp.afiliado_igss, fecha_inicio: new Date().toISOString().slice(0, 10), observaciones: '' })
     setShowHistorial(true)
   }
@@ -811,7 +813,7 @@ function TabAsistencia() {
       else load()
     }, 60000)
     return () => clearInterval(timer)
-  }, [incluyeHoy, viewMode, load, empFiltro, fechaIni, fechaFin])
+  }, [incluyeHoy, viewMode, load, loadDetalle, empFiltro, fechaIni, fechaFin])
 
   return (
     <div className="space-y-6">
@@ -1241,7 +1243,7 @@ function TabCostoLaboral() {
 // TAB: PERÍODOS
 // ══════════════════════════════════════════════════════════════════════════════
 
-function TabPeriodos({ onCalcular }) {
+function TabPeriodos() {
   const [periodos, setPeriodos] = useState([])
   const [loading, setLoading] = useState(true)
   const [showModal, setShowModal] = useState(false)
@@ -1271,7 +1273,7 @@ function TabPeriodos({ onCalcular }) {
     try {
       const j = await getJornada()
       setPreview(calcularHorasTeoricas(form.fecha_inicio, form.fecha_fin, j))
-    } catch(e) { setPreview(null) }
+    } catch { setPreview(null) }
   }
 
   async function handleCalcular(p) {
@@ -1416,7 +1418,9 @@ function TabCalculo() {
 
   async function handleVerConceptos(det) {
     setSelectedDet(det)
-    try { setConceptos(await getNominaDetalleConceptos(det.id)) } catch {}
+    try { setConceptos(await getNominaDetalleConceptos(det.id)) } catch {
+      // Sin conceptos detallados, se mantiene visible el detalle principal.
+    }
   }
 
   const resumen = useMemo(() => calcularResumenPeriodo(detalles), [detalles])
@@ -1677,7 +1681,9 @@ function TabVacaciones() {
 
   async function loadSaldo(empId) {
     if (!empId) return
-    try { setSaldo(await getSaldoVacaciones(empId)) } catch {}
+    try { setSaldo(await getSaldoVacaciones(empId)) } catch {
+      // El saldo se puede recalcular al reabrir la vista.
+    }
   }
 
   return (
@@ -1887,7 +1893,9 @@ function TabPrestamos() {
 
   async function verMovimientos(p) {
     setSelectedPrestamo(p)
-    try { setMovimientos(await getMovimientosPrestamo(p.id)) } catch {}
+    try { setMovimientos(await getMovimientosPrestamo(p.id)) } catch {
+      // Si falla el detalle, no bloqueamos el listado de prestamos.
+    }
   }
 
   return (
@@ -2209,7 +2217,9 @@ function TabPagos() {
 
   async function verDetalle(pago) {
     setSelectedPago(pago)
-    try { setDetallesPago(await getDetallePago(pago.id)) } catch {}
+    try { setDetallesPago(await getDetallePago(pago.id)) } catch {
+      // El pago sigue seleccionable aunque el detalle no cargue.
+    }
   }
 
   return (
@@ -2466,7 +2476,6 @@ function TabReportes() {
 // ══════════════════════════════════════════════════════════════════════════════
 
 function TabParametros() {
-  const [params, setParams] = useState(null)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [savingJornada, setSavingJornada] = useState(false)
@@ -2503,7 +2512,6 @@ function TabParametros() {
     }).catch(() => {})
 
     getParametros().then(p => {
-      setParams(p)
       if (p) setForm({
         vigencia_desde: p.vigencia_desde,
         porcentaje_igss_laboral:       String(n(p.porcentaje_igss_laboral) * 100),

@@ -1,4 +1,5 @@
 import Anthropic from 'npm:@anthropic-ai/sdk'
+import { createClient } from 'npm:@supabase/supabase-js@2'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -6,6 +7,26 @@ const corsHeaders = {
 }
 
 const anthropic = new Anthropic({ apiKey: Deno.env.get('ANTHROPIC_API_KEY')! })
+const supabase = createClient(
+  Deno.env.get('SUPABASE_URL')!,
+  Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
+  { auth: { persistSession: false, autoRefreshToken: false } },
+)
+
+function bearerToken(req: Request) {
+  const auth = req.headers.get('Authorization') || ''
+  return auth.startsWith('Bearer ') ? auth.slice('Bearer '.length) : null
+}
+
+async function requireAuthenticatedUser(req: Request) {
+  const token = bearerToken(req)
+  if (!token) throw new Error('Authorization bearer token is required')
+
+  const { data, error } = await supabase.auth.getUser(token)
+  if (error || !data.user) throw new Error('Invalid authorization token')
+
+  return data.user
+}
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
@@ -13,6 +34,8 @@ Deno.serve(async (req) => {
   }
 
   try {
+    await requireAuthenticatedUser(req)
+
     const { file_base64, mime_type } = await req.json()
 
     if (!file_base64 || !mime_type) {
@@ -91,9 +114,10 @@ Reglas:
     })
   } catch (err) {
     const msg = err instanceof Error ? err.message : 'Error desconocido'
+    const status = msg.includes('Authorization') || msg.includes('authorization') ? 401 : 500
     return new Response(
       JSON.stringify({ error: msg }),
-      { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      { status, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     )
   }
 })

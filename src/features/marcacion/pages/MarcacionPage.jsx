@@ -150,7 +150,9 @@ export default function MarcacionPage() {
     try {
       const data = await getEmpleados({ tipo: 'operario', estado: 'activo' })
       setOperarios(data)
-    } catch {}
+    } catch {
+      // Mantener el flujo de marcacion aunque falle la carga auxiliar.
+    }
     finally { setLoadingOps(false) }
   }, [authProfile?.role])
 
@@ -344,7 +346,7 @@ export default function MarcacionPage() {
 
     loadProfileContext()
     return () => { active = false }
-  }, [])
+  }, [navigate])
 
   // ─── Filtro de búsqueda ───────────────────────────────────────────────────
   const filtrados = operarios.filter(e =>
@@ -590,7 +592,6 @@ export default function MarcacionPage() {
                 )}
 
                 <div className="relative overflow-hidden rounded-2xl bg-stone-900" style={{ aspectRatio: '4/3' }}>
-                  {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
                   <video
                     ref={videoRef}
                     autoPlay

@@ -119,7 +119,7 @@ export default function OperatorSetupPage() {
             setCameraReady(true)
           }
         }
-      } catch (err) {
+      } catch {
         if (!cancelled) {
           setCameraError('No se pudo acceder a la cámara. Revisa permisos del navegador.')
         }
@@ -267,7 +267,6 @@ export default function OperatorSetupPage() {
                     <img src={fotoDataUrl} alt="Biometría facial" className="h-full w-full object-cover" />
                   ) : (
                     <>
-                      {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
                       <video
                         ref={videoRef}
                         autoPlay

@@ -1,5 +1,6 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import Sidebar from './Sidebar'
+import { getMyProfile } from '../../features/auth/services/authService'
 
 function HamburgerIcon({ open }) {
   return (
@@ -15,6 +16,11 @@ function HamburgerIcon({ open }) {
 
 export default function Layout({ children }) {
   const [sidebarOpen, setSidebarOpen] = useState(false)
+  const [profile, setProfile] = useState(null)
+
+  useEffect(() => {
+    getMyProfile().then(setProfile).catch(() => setProfile(null))
+  }, [])
 
   return (
     <div className="flex h-screen overflow-hidden bg-[#f6f1e8]">
@@ -32,7 +38,7 @@ export default function Layout({ children }) {
           sidebarOpen ? 'translate-x-0' : '-translate-x-full'
         }`}
       >
-        <Sidebar onClose={() => setSidebarOpen(false)} />
+        <Sidebar onClose={() => setSidebarOpen(false)} profile={profile} />
       </div>
 
       {/* Main content */}

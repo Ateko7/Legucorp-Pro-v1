@@ -414,16 +414,12 @@ export default function CxPPage() {
   }, [load])
 
   useEffect(() => {
-    loadPaymentReport()
-  }, [reportMonth])
-
-  useEffect(() => {
     getBankAccounts().then(setBankAccounts).catch((e) => setError(e.message))
   }, [])
 
   useRealtimeRefresh(['supplier_accounts_payable', 'processed_inventory_lots', 'material_process_stage_outputs'], load)
 
-  async function loadPaymentReport() {
+  const loadPaymentReport = useCallback(async () => {
     setReportLoading(true)
     try {
       setPaymentReportRows(await getSupplierPaymentReportData(reportMonth))
@@ -432,7 +428,11 @@ export default function CxPPage() {
     } finally {
       setReportLoading(false)
     }
-  }
+  }, [reportMonth])
+
+  useEffect(() => {
+    loadPaymentReport()
+  }, [loadPaymentReport])
 
   async function handleSaveInvoice(payload) {
     setSaving(true)

@@ -1,5 +1,5 @@
 import { supabase } from '../../../lib/supabase'
-import { postAccountingEvent } from '../../contabilidad/services/contabilidadService'
+import { ensureAccountingTemplatesCurrent, postAccountingEvent } from '../../contabilidad/services/contabilidadService'
 
 function n(v) {
   const x = Number(v)
@@ -77,6 +77,27 @@ async function ensureExpensePaymentAccounts(orgId, expenseType) {
   return { expenseAccountCode, accountMap: map }
 }
 
+async function ensureProductionSettlementAccounts(orgId) {
+  const { data: accounts, error } = await supabase
+    .from('accounting_accounts')
+    .select('id, code')
+    .eq('organization_id', orgId)
+    .in('code', ['1400', '6200'])
+
+  if (error) throw new Error(error.message)
+
+  const map = {}
+  ;(accounts || []).forEach((account) => {
+    map[account.code] = account.id
+  })
+
+  if (!map['1400'] || !map['6200']) {
+    throw new Error('Catalogo de cuentas incompleto para reclasificar el gasto de produccion')
+  }
+
+  return map
+}
+
 async function createExpensePaymentEntryWithBank({ expense, profile }) {
   if (expense.journal_entry_id) return expense.journal_entry_id
 
@@ -118,6 +139,39 @@ async function createExpensePaymentEntryWithBank({ expense, profile }) {
       expense_account_id: accountMap[expenseAccountCode],
       bank_accounting_account_id: bankAccountCodeId,
       cost_center_id: expense.cost_center_id || null,
+    },
+  })
+
+  await supabase
+    .from('expenses')
+    .update({ journal_entry_id: entryId })
+    .eq('id', expense.id)
+
+  return entryId
+}
+
+async function createSupplierProductionSettlementEntry({ expense, profile, cxpRow }) {
+  if (expense.journal_entry_id) return expense.journal_entry_id
+
+  await ensureAccountingTemplatesCurrent(profile.organization_id)
+  const accountMap = await ensureProductionSettlementAccounts(profile.organization_id)
+
+  const entryId = await postAccountingEvent({
+    eventCode: 'CIERRE_PROCESO_MP',
+    entryDate: expense.paid_at?.slice(0, 10) || expense.expense_date,
+    description: `Gasto de produccion por pago a proveedor: ${expense.description}`,
+    referenceType: 'gasto',
+    referenceId: expense.id,
+    sourceType: 'expense',
+    sourceId: expense.id,
+    payload: {
+      amount: n(expense.amount),
+      description: expense.description,
+      cost_center_id: expense.cost_center_id || null,
+      inventory_account_id: accountMap['1400'],
+      internal_lot: cxpRow?.internalLot || '',
+      dimension_supplier_id: expense.supplier_id || cxpRow?.supplier_id || null,
+      dimension_lot_id: cxpRow?.processed_inventory_lot_id || null,
     },
   })
 
@@ -390,9 +444,9 @@ export async function ensureSupplierPaymentExpense({
   if (error) throw new Error(error.message || 'No se pudo reflejar la CxP pagada como gasto')
 
   try {
-    await createExpensePaymentEntryWithBank({ expense, profile })
+    await createSupplierProductionSettlementEntry({ expense, profile, cxpRow })
   } catch (accountingError) {
-    console.warn('Asiento de gasto por CxP pagada no generado:', accountingError.message)
+    console.warn('Asiento de produccion por CxP pagada no generado:', accountingError.message)
   }
 
   return expense.id

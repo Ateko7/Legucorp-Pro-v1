@@ -46,7 +46,7 @@ export async function getParametrosVigentes(orgId, fecha = null) {
 
 // ─── Inicializar parámetros para una org nueva ───────────────────────────────
 
-export async function initParametrosNomina(orgId, userId) {
+export async function initParametrosNomina(orgId) {
   const { data: existing } = await supabase
     .from('parametros_nomina')
     .select('id')

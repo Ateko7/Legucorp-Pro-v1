@@ -231,8 +231,6 @@ export async function calcularLiquidacion(empleadoId, { fecha_salida, motivo_sal
   const salida   = new Date(fecha_salida)
   const diasServicio = Math.floor((salida - ingreso) / 86400000)
   const añosServicio = diasServicio / 365.25
-  const mesServicio  = diasServicio / 30.4375
-
   const salBase  = n(emp.salario_base_actual)
   const bono     = n(emp.bonificacion_incentivo_actual)
   const salDiario = round2(salBase / 30)
@@ -412,7 +410,6 @@ export async function getDetallePago(pagoId) {
 }
 
 export async function marcarPagado(pagoId) {
-  const profile = await getProfile()
   await supabase.from('nomina_pagos').update({ estado: 'pagado' }).eq('id', pagoId)
   await supabase.from('nomina_pago_detalle').update({ estado: 'procesado' }).eq('nomina_pago_id', pagoId)
 

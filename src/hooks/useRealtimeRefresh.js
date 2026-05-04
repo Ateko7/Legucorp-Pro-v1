@@ -8,12 +8,17 @@ import { supabase } from '../lib/supabase'
  *
  * @param {string[]} tables     - table names to watch (must be stable reference or array literal)
  * @param {() => void} onRefresh - the page's load / reload function
- * @param {number} [debounceMs=700] - debounce window to batch rapid changes
+ * @param {number|{debounceMs?: number, minIntervalMs?: number}} [options=700]
+ * - debounceMs: window to batch rapid changes
+ * - minIntervalMs: minimum gap between refreshes
  */
-export function useRealtimeRefresh(tables, onRefresh, debounceMs = 700) {
+export function useRealtimeRefresh(tables, onRefresh, options = 700) {
   // Keep a stable ref so the subscription closure always calls the latest callback
   const refreshRef = useRef(onRefresh)
   useEffect(() => { refreshRef.current = onRefresh }, [onRefresh])
+
+  const debounceMs = typeof options === 'number' ? options : (options?.debounceMs ?? 700)
+  const minIntervalMs = typeof options === 'number' ? 0 : (options?.minIntervalMs ?? 0)
 
   // Stable key for the channel so we only re-subscribe when the table list changes
   const tablesKey = Array.isArray(tables) ? tables.slice().sort().join(',') : ''
@@ -21,11 +26,32 @@ export function useRealtimeRefresh(tables, onRefresh, debounceMs = 700) {
   useEffect(() => {
     if (!tablesKey) return
 
-    let timer = null
+    let debounceTimer = null
+    let intervalTimer = null
+    let lastRefreshAt = 0
+
+    function runRefresh() {
+      lastRefreshAt = Date.now()
+      refreshRef.current?.()
+    }
+
+    function scheduleRefresh() {
+      const elapsed = Date.now() - lastRefreshAt
+      const remaining = Math.max(0, minIntervalMs - elapsed)
+
+      clearTimeout(intervalTimer)
+
+      if (remaining === 0) {
+        runRefresh()
+        return
+      }
+
+      intervalTimer = setTimeout(runRefresh, remaining)
+    }
 
     function triggerRefresh() {
-      clearTimeout(timer)
-      timer = setTimeout(() => refreshRef.current?.(), debounceMs)
+      clearTimeout(debounceTimer)
+      debounceTimer = setTimeout(scheduleRefresh, debounceMs)
     }
 
     // Re-fetch when the user switches back to this tab
@@ -49,10 +75,11 @@ export function useRealtimeRefresh(tables, onRefresh, debounceMs = 700) {
     channel.subscribe()
 
     return () => {
-      clearTimeout(timer)
+      clearTimeout(debounceTimer)
+      clearTimeout(intervalTimer)
       document.removeEventListener('visibilitychange', onVisibility)
       supabase.removeChannel(channel)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tablesKey, debounceMs])
+  }, [tablesKey, debounceMs, minIntervalMs])
 }

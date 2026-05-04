@@ -5,6 +5,7 @@ import LoginPage from './features/auth/pages/LoginPage'
 import OperatorSetupPage from './features/auth/pages/OperatorSetupPage'
 import RegisterPage from './features/auth/pages/RegisterPage'
 import DashboardPage from './features/dashboard/pages/DashboardPage'
+import AlertCenterPage from './features/alertCenter/pages/AlertCenterPage'
 import ProductBasesPage from './features/productBases/pages/productBasesPage'
 import CuartoFrioPage from './features/produccion/pages/CuartoFrioPage'
 import RecepcionPage from './features/recepcion/pages/RecepcionPage'
@@ -27,6 +28,8 @@ import PresupuestoVentasPage from './features/presupuestoVentas/pages/Presupuest
 import LogisticaPage from './features/logistica/pages/LogisticaPage'
 import ReclamosPage from './features/reclamos/pages/ReclamosPage'
 import ContabilidadPage from './features/contabilidad/pages/ContabilidadPage'
+import FacturasFelPage from './features/fel/pages/FacturasFelPage'
+import FelIntercompanyPage from './features/felIntercompany/pages/FelIntercompanyPage'
 import CxCPage from './features/finanzas/pages/CxCPage'
 import CxPPage from './features/finanzas/pages/CxPPage'
 import GastosPage from './features/finanzas/pages/GastosPage'
@@ -34,6 +37,11 @@ import CajaPage from './features/finanzas/pages/CajaPage'
 import FlujoCajaPage from './features/finanzas/pages/FlujoCajaPage'
 import CotizacionesPage from './features/cotizaciones/pages/CotizacionesPage'
 import VendedoresPage from './features/vendedores/pages/VendedoresPage'
+import CommercialDashboardPage from './features/comercial/pages/CommercialDashboardPage'
+import ProspectsPage from './features/comercial/pages/ProspectsPage'
+import FollowupsPage from './features/comercial/pages/FollowupsPage'
+import CustomerProfitabilityPage from './features/comercial/pages/CustomerProfitabilityPage'
+import CommercialIntelligencePage from './features/comercial/pages/CommercialIntelligencePage'
 import NominaPage from './features/nomina/pages/NominaPage'
 import MarcacionPage from './features/marcacion/pages/MarcacionPage'
 import CalidadPage from './features/calidad/pages/CalidadPage'
@@ -41,6 +49,9 @@ import ExportacionPage from './features/exportacion/pages/ExportacionPage'
 import TrazabilidadPage from './features/trazabilidad/pages/TrazabilidadPage'
 import CierresPage from './features/cierres/pages/CierresPage'
 import ConfiguracionPage from './features/configuracion/pages/ConfiguracionPage'
+import UserAccessPage from './features/configuracion/pages/UserAccessPage'
+import ExcelImporterPage from './features/importer/pages/ExcelImporterPage'
+import MantenimientoPage from './features/mantenimiento/pages/MantenimientoPage'
 
 function wrap(element) {
   return (
@@ -64,6 +75,7 @@ export default function App() {
         <Route path="/operario-onboarding" element={wrapKiosk(<OperatorSetupPage />)} />
 
         <Route path="/" element={wrap(<DashboardPage />)} />
+        <Route path="/centro-alertas" element={wrap(<AlertCenterPage />)} />
         <Route path="/clientes" element={wrap(<ClientsPage />)} />
         <Route path="/proveedores" element={wrap(<SuppliersPage />)} />
         <Route path="/materias-primas" element={wrap(<MaterialsPage />)} />
@@ -76,7 +88,7 @@ export default function App() {
         <Route path="/procesos-mp" element={wrap(<ProcesosMpPage />)} />
         <Route path="/inventario-procesado" element={wrap(<InventarioProcesadoPage />)} />
         <Route path="/empaque" element={wrap(<EmpaquePage />)} />
-        <Route path="/cuarto frio" element={wrap(<CuartoFrioPage />)} />
+        <Route path="/cuarto-frio" element={wrap(<CuartoFrioPage />)} />
         <Route path="/pedidos" element={wrap(<PedidosPage />)} />
         <Route path="/demanda-mp" element={wrap(<DemandaMpPage />)} />
         <Route path="/proyeccion-compras" element={wrap(<ProyeccionComprasPage />)} />
@@ -86,6 +98,8 @@ export default function App() {
         <Route path="/logistica" element={wrap(<LogisticaPage />)} />
         <Route path="/reclamos" element={wrap(<ReclamosPage />)} />
         <Route path="/contabilidad" element={wrap(<ContabilidadPage />)} />
+        <Route path="/facturas-fel" element={wrap(<FacturasFelPage />)} />
+        <Route path="/fel-intercompany" element={wrap(<FelIntercompanyPage />)} />
         <Route path="/cxc" element={wrap(<CxCPage />)} />
         <Route path="/cxp" element={wrap(<CxPPage />)} />
         <Route path="/caja" element={wrap(<CajaPage />)} />
@@ -93,13 +107,21 @@ export default function App() {
         <Route path="/gastos" element={wrap(<GastosPage />)} />
         <Route path="/cotizaciones" element={wrap(<CotizacionesPage />)} />
         <Route path="/vendedores" element={wrap(<VendedoresPage />)} />
+        <Route path="/comercial/dashboard" element={wrap(<CommercialDashboardPage />)} />
+        <Route path="/comercial/prospectos" element={wrap(<ProspectsPage />)} />
+        <Route path="/comercial/seguimientos" element={wrap(<FollowupsPage />)} />
+        <Route path="/comercial/rentabilidad-clientes" element={wrap(<CustomerProfitabilityPage />)} />
+        <Route path="/comercial/inteligencia" element={wrap(<CommercialIntelligencePage />)} />
         <Route path="/nomina" element={wrap(<NominaPage />)} />
         <Route path="/marcacion" element={wrapKiosk(<MarcacionPage />)} />
         <Route path="/calidad" element={wrap(<CalidadPage />)} />
         <Route path="/exportacion" element={wrap(<ExportacionPage />)} />
         <Route path="/trazabilidad" element={wrap(<TrazabilidadPage />)} />
         <Route path="/cierres" element={wrap(<CierresPage />)} />
+        <Route path="/mantenimiento" element={wrap(<MantenimientoPage />)} />
         <Route path="/configuracion" element={wrap(<ConfiguracionPage />)} />
+        <Route path="/usuarios-permisos" element={wrap(<UserAccessPage />)} />
+        <Route path="/importar-excel" element={wrap(<ExcelImporterPage />)} />
 
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>

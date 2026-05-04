@@ -104,7 +104,7 @@ export default function RegisterPage() {
       <div className="w-full max-w-xl">
         <div className="mb-8 flex flex-col items-center text-center">
           <div className="mb-4 flex h-14 w-14 items-center justify-center overflow-hidden rounded-2xl bg-white shadow-md">
-            <img src="/Logo Leume Impresiones CMYK (1).png" alt="Legucorp" className="h-full w-full object-contain" />
+            <img src="/legucorp-logo.png" alt="Legucorp" className="h-full w-full object-contain" />
           </div>
           <h1 className="text-2xl font-bold tracking-tight text-stone-900">Crear cuenta</h1>
           <p className="mt-1 text-sm text-stone-500">Vincula tu usuario a una empresa o crea una nueva</p>
