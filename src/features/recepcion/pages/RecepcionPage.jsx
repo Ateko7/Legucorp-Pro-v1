@@ -11,6 +11,14 @@ import {
   releaseReception,
   rejectReception,
 } from '../services/receptionService'
+import {
+  createInspeccion,
+  getInspecciones,
+  getSpecTemplates,
+  completarInspeccion,
+  evaluateInspectionDraft,
+  RESULTADOS_CALIDAD,
+} from '../../calidad/services/calidadService'
 
 const emptyForm = {
   purchase_order_id: '',
@@ -25,6 +33,26 @@ const emptyForm = {
   quality_notes: '',
   unit_cost: '',
   bulk_items: [],
+}
+
+const RESULTADO_LABEL = {
+  liberado: 'Liberado',
+  liberado_con_observacion: 'Con observacion',
+  retenido: 'Retenido',
+  rechazado: 'Rechazado',
+}
+
+const RESULTADO_COLOR = {
+  liberado: 'bg-emerald-100 text-emerald-700',
+  liberado_con_observacion: 'bg-amber-100 text-amber-700',
+  retenido: 'bg-orange-100 text-orange-700',
+  rechazado: 'bg-red-100 text-red-700',
+}
+
+const SEVERITY_COLOR = {
+  menor: 'bg-stone-100 text-stone-700',
+  mayor: 'bg-orange-100 text-orange-700',
+  critico: 'bg-red-100 text-red-700',
 }
 
 function toBulkItem(item) {
@@ -55,6 +83,9 @@ export default function RecepcionPage() {
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
   const [showModal, setShowModal] = useState(false)
+  const [qualityModal, setQualityModal] = useState(null)
+  const [qualityTemplates, setQualityTemplates] = useState([])
+  const [receptionInspections, setReceptionInspections] = useState([])
   const [search, setSearch] = useState('')
   const [form, setForm] = useState(emptyForm)
 
@@ -68,18 +99,27 @@ export default function RecepcionPage() {
     setError('')
 
     try {
-      const [receptionsData, suppliersData, materialsData, purchaseOrdersData] =
+      const [receptionsData, suppliersData, materialsData, purchaseOrdersData, templates, inspections] =
         await Promise.all([
           getReceptions(),
           getReceptionSuppliers(),
           getReceptionMaterials(),
           getOpenPurchaseOrders(),
+          getSpecTemplates('recepcion_mp'),
+          getInspecciones({
+            inspection_stage: 'recepcion_mp',
+            desde: new Date(Date.now() - 60 * 86400000).toISOString().slice(0, 10),
+            hasta: new Date().toISOString().slice(0, 10),
+            limit: 300,
+          }),
         ])
 
       setReceptions(receptionsData)
       setSuppliers(suppliersData)
       setMaterials(materialsData)
       setPurchaseOrders(purchaseOrdersData)
+      setQualityTemplates(templates)
+      setReceptionInspections(inspections)
     } catch (err) {
       setError(err.message || 'No se pudo cargar recepción')
     } finally {
@@ -231,6 +271,55 @@ export default function RecepcionPage() {
     }
   }
 
+  async function handleStartQualityInspection(row) {
+    setStatusLoadingId(row.id)
+    setError('')
+    setSuccess('')
+
+    try {
+      const existing = receptionInspections.find(
+        (inspection) =>
+          inspection.source_reception_id === row.id &&
+          inspection.status !== 'cancelada'
+      )
+
+      if (existing) {
+        setQualityModal(existing)
+      } else {
+        const inspection = await createInspeccion({
+          inspection_stage: 'recepcion_mp',
+          source_reception_id: row.id,
+          spec_template_id: qualityTemplates[0]?.id || null,
+          origen: 'manual',
+          tamano_muestra: 1,
+          observaciones: row.quality_notes || '',
+        })
+        setQualityModal(inspection)
+      }
+    } catch (err) {
+      setError(err.message || 'No se pudo abrir la inspeccion de calidad.')
+    } finally {
+      setStatusLoadingId(null)
+    }
+  }
+
+  async function handleCompleteReceptionInspection(inspectionId, payload) {
+    const saved = await completarInspeccion(inspectionId, payload)
+
+    if (saved.resultado === 'liberado' || saved.resultado === 'liberado_con_observacion') {
+      await handleRelease(saved.source_reception_id)
+      setSuccess('Inspeccion aprobada y lote liberado al inventario.')
+    } else if (saved.resultado === 'rechazado') {
+      await handleReject(saved.source_reception_id)
+      setSuccess('Inspeccion rechazada y recepcion marcada como rechazada.')
+    } else {
+      setSuccess('Inspeccion guardada. La recepcion quedo retenida pendiente de resolucion.')
+    }
+
+    setQualityModal(null)
+    await loadAll()
+  }
+
   const selectedPO = useMemo(() => {
     return purchaseOrders.find((po) => po.id === form.purchase_order_id) || null
   }, [purchaseOrders, form.purchase_order_id])
@@ -281,6 +370,17 @@ export default function RecepcionPage() {
         .some((value) => String(value).toLowerCase().includes(term))
     )
   }, [receptions, search])
+
+  const inspectionByReceptionId = useMemo(() => {
+    const map = {}
+    for (const inspection of receptionInspections) {
+      if (!inspection.source_reception_id) continue
+      if (!map[inspection.source_reception_id]) {
+        map[inspection.source_reception_id] = inspection
+      }
+    }
+    return map
+  }, [receptionInspections])
 
   return (
     <div className="space-y-8">
@@ -385,22 +485,27 @@ export default function RecepcionPage() {
                   <div>Lote proveedor: {row.supplier_lot || '—'}</div>
                 </div>
 
+                {inspectionByReceptionId[row.id] ? (
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    <span className={`rounded-full px-3 py-1 text-xs font-semibold ${RESULTADO_COLOR[inspectionByReceptionId[row.id].resultado] || 'bg-stone-100 text-stone-700'}`}>
+                      Calidad: {inspectionByReceptionId[row.id].resultado ? RESULTADO_LABEL[inspectionByReceptionId[row.id].resultado] : inspectionByReceptionId[row.id].status}
+                    </span>
+                    {inspectionByReceptionId[row.id].spec_template?.name ? (
+                      <span className="rounded-full bg-stone-100 px-3 py-1 text-xs font-semibold text-stone-600">
+                        {inspectionByReceptionId[row.id].spec_template.name}
+                      </span>
+                    ) : null}
+                  </div>
+                ) : null}
+
                 {row.status === 'recibido' ? (
                   <div className="mt-4 flex flex-wrap gap-3">
                     <button
-                      onClick={() => handleRelease(row.id)}
+                      onClick={() => handleStartQualityInspection(row)}
                       disabled={statusLoadingId === row.id}
-                      className="rounded-2xl bg-emerald-700 px-4 py-2 text-sm font-semibold text-white transition hover:bg-emerald-800 disabled:opacity-60"
+                      className="rounded-2xl bg-[#2f5d50] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[#264c42] disabled:opacity-60"
                     >
-                      {statusLoadingId === row.id ? 'Procesando...' : 'Liberar lote'}
-                    </button>
-
-                    <button
-                      onClick={() => handleReject(row.id)}
-                      disabled={statusLoadingId === row.id}
-                      className="rounded-2xl bg-red-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-red-700 disabled:opacity-60"
-                    >
-                      {statusLoadingId === row.id ? 'Procesando...' : 'Rechazar lote'}
+                      {statusLoadingId === row.id ? 'Abriendo...' : inspectionByReceptionId[row.id] ? 'Continuar inspeccion' : 'Inspeccion de calidad'}
                     </button>
                   </div>
                 ) : null}
@@ -688,7 +793,7 @@ export default function RecepcionPage() {
           <div className="rounded-2xl border border-stone-200 bg-stone-50 px-4 py-4 text-sm text-stone-600">
             El lote interno no se escribe manualmente. Se generará automáticamente al guardar.
             El estado inicial del lote será <span className="font-semibold">recibido</span>.
-            Luego podrás <span className="font-semibold">liberarlo</span> o <span className="font-semibold">rechazarlo</span> desde el listado.
+            Luego podrás hacer la <span className="font-semibold">inspeccion de calidad</span> desde el listado para liberarlo, retenerlo o rechazarlo.
           </div>
 
           {error ? (
@@ -722,8 +827,243 @@ export default function RecepcionPage() {
           </div>
         </form>
       </Modal>
+
+      {qualityModal ? (
+        <ReceptionQualityModal
+          inspection={qualityModal}
+          onClose={() => setQualityModal(null)}
+          onSave={handleCompleteReceptionInspection}
+        />
+      ) : null}
     </div>
   )
+}
+
+function ReceptionQualityModal({ inspection, onClose, onSave }) {
+  const [measurements, setMeasurements] = useState(
+    (inspection.spec_rules || []).map((rule) => ({
+      spec_rule_id: rule.id,
+      actual_numeric: '',
+      actual_boolean: null,
+      actual_text: '',
+      actual_count: '',
+      notes: '',
+    }))
+  )
+  const [defectos, setDefectos] = useState([])
+  const [draftDefect, setDraftDefect] = useState({ tipo_defecto: '', cantidad: 1, nivel: 'menor' })
+  const [form, setForm] = useState({
+    resultado: inspection.resultado || '',
+    unidades_inspeccionadas: inspection.unidades_inspeccionadas || inspection.tamano_muestra || 1,
+    unidades_defectuosas: 0,
+    observaciones: inspection.observaciones || '',
+    override_reason: '',
+  })
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState('')
+  const [manualResult, setManualResult] = useState(Boolean(inspection.resultado))
+
+  useEffect(() => {
+    setForm((current) => ({
+      ...current,
+      unidades_defectuosas: defectos.reduce((sum, item) => sum + Number(item.cantidad || 0), 0),
+    }))
+  }, [defectos])
+
+  const preview = useMemo(
+    () => evaluateInspectionDraft(inspection.spec_rules || [], measurements, defectos),
+    [inspection.spec_rules, measurements, defectos]
+  )
+
+  useEffect(() => {
+    if (!manualResult) {
+      setForm((current) => ({ ...current, resultado: preview.resultado_automatico }))
+    }
+  }, [preview.resultado_automatico, manualResult])
+
+  function updateMeasurement(ruleId, nextValue) {
+    setMeasurements((current) => current.map((item) => (item.spec_rule_id === ruleId ? nextValue : item)))
+  }
+
+  function addDefect() {
+    if (!draftDefect.tipo_defecto.trim()) return
+    setDefectos((current) => [...current, { ...draftDefect, cantidad: parseInt(draftDefect.cantidad || 1, 10) || 1 }])
+    setDraftDefect({ tipo_defecto: '', cantidad: 1, nivel: 'menor' })
+  }
+
+  async function handleSave() {
+    setSaving(true)
+    setError('')
+    try {
+      await onSave(inspection.id, {
+        ...form,
+        measurements,
+        defectos,
+      })
+    } catch (err) {
+      setError(err.message || 'No se pudo guardar la inspeccion.')
+      setSaving(false)
+    }
+  }
+
+  return (
+    <Modal isOpen={true} onClose={onClose} title="Inspeccion de calidad de recepcion" maxWidth="max-w-5xl">
+      <div className="space-y-6">
+        <div className="rounded-2xl border border-stone-200 bg-stone-50 px-4 py-3">
+          <p className="text-sm font-semibold text-stone-800">{inspection.source_label}</p>
+          <p className="mt-1 text-xs text-stone-500">{inspection.spec_template?.name || 'Plantilla de recepción'}</p>
+        </div>
+
+        <div className="grid gap-6 lg:grid-cols-[1.2fr_0.8fr]">
+          <div className="space-y-4">
+            {(inspection.spec_rules || []).map((rule) => {
+              const currentValue = measurements.find((item) => item.spec_rule_id === rule.id) || { spec_rule_id: rule.id }
+              const evaluated = preview.measurements.find((item) => item.spec_rule_id === rule.id)
+              return (
+                <div key={rule.id} className="rounded-2xl border border-stone-200 p-4">
+                  <div className="mb-3 flex flex-wrap items-start justify-between gap-2">
+                    <div>
+                      <p className="text-sm font-semibold text-stone-800">{rule.label}</p>
+                      <p className="mt-1 text-xs text-stone-400">
+                        {rule.measurement_type}
+                        {rule.unit ? ` · ${rule.unit}` : ''}
+                        {rule.min_value != null ? ` · Min ${rule.min_value}` : ''}
+                        {rule.max_value != null ? ` · Max ${rule.max_value}` : ''}
+                        {rule.defect_threshold != null ? ` · Umbral ${rule.defect_threshold}` : ''}
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${SEVERITY_COLOR[rule.severity] || SEVERITY_COLOR.menor}`}>{rule.severity}</span>
+                      {evaluated ? (
+                        <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${evaluated.pass ? 'bg-emerald-100 text-emerald-700' : RESULTADO_COLOR[evaluated.decision_effect]}`}>
+                          {evaluated.pass ? 'Cumple' : `Falla · ${RESULTADO_LABEL[evaluated.decision_effect]}`}
+                        </span>
+                      ) : null}
+                    </div>
+                  </div>
+                  <ReceptionMeasurementField rule={rule} value={currentValue} onChange={(next) => updateMeasurement(rule.id, next)} />
+                </div>
+              )
+            })}
+
+            <div className="rounded-2xl border border-stone-200 p-4">
+              <p className="mb-3 text-sm font-semibold text-stone-800">Defectos observados</p>
+              <div className="space-y-2">
+                {defectos.map((defecto, index) => (
+                  <div key={`${defecto.tipo_defecto}-${index}`} className="flex items-center justify-between rounded-2xl bg-stone-50 px-3 py-2">
+                    <div className="flex items-center gap-2">
+                      <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${SEVERITY_COLOR[defecto.nivel] || SEVERITY_COLOR.menor}`}>{defecto.nivel}</span>
+                      <span className="text-sm font-medium text-stone-800">{defecto.tipo_defecto}</span>
+                      <span className="text-xs text-stone-400">x{defecto.cantidad}</span>
+                    </div>
+                    <button type="button" onClick={() => setDefectos((current) => current.filter((_, innerIndex) => innerIndex !== index))} className="rounded-full p-1 text-stone-400 hover:bg-stone-100 hover:text-red-500">
+                      x
+                    </button>
+                  </div>
+                ))}
+              </div>
+              <div className="mt-3 grid gap-2 sm:grid-cols-[1fr_90px_140px_48px]">
+                <input value={draftDefect.tipo_defecto} onChange={(e) => setDraftDefect((current) => ({ ...current, tipo_defecto: e.target.value }))} placeholder="Tipo de defecto" className="rounded-2xl border border-stone-200 px-4 py-2.5 text-sm focus:border-emerald-700 focus:outline-none" />
+                <input type="number" min="1" value={draftDefect.cantidad} onChange={(e) => setDraftDefect((current) => ({ ...current, cantidad: e.target.value }))} className="rounded-2xl border border-stone-200 px-4 py-2.5 text-sm focus:border-emerald-700 focus:outline-none" />
+                <select value={draftDefect.nivel} onChange={(e) => setDraftDefect((current) => ({ ...current, nivel: e.target.value }))} className="rounded-2xl border border-stone-200 px-4 py-2.5 text-sm focus:border-emerald-700 focus:outline-none">
+                  <option value="menor">Menor</option>
+                  <option value="mayor">Mayor</option>
+                  <option value="critico">Critico</option>
+                </select>
+                <button type="button" onClick={addDefect} className="rounded-2xl bg-[#2f5d50] px-3 py-2 text-sm font-semibold text-white hover:bg-[#264c42]">+</button>
+              </div>
+            </div>
+          </div>
+
+          <div className="space-y-4">
+            <div className="rounded-2xl border border-stone-200 p-4">
+              <p className="text-xs font-semibold uppercase tracking-widest text-stone-400">Resultado automatico</p>
+              <div className="mt-2">
+                <span className={`rounded-full px-3 py-1 text-xs font-semibold ${RESULTADO_COLOR[preview.resultado_automatico]}`}>
+                  {RESULTADO_LABEL[preview.resultado_automatico]}
+                </span>
+              </div>
+              <p className="mt-2 text-xs text-stone-500">
+                {preview.failing_rules} criterio(s) fuera de tolerancia
+                {preview.top_severity ? ` · severidad maxima ${preview.top_severity}` : ''}
+              </p>
+            </div>
+
+            <div>
+              <label className="mb-2 block text-sm font-medium text-stone-700">Resultado final</label>
+              <div className="grid grid-cols-2 gap-2">
+                {RESULTADOS_CALIDAD.map((result) => (
+                  <button
+                    key={result}
+                    type="button"
+                    onClick={() => {
+                      setManualResult(true)
+                      setForm((current) => ({ ...current, resultado: result }))
+                    }}
+                    className={`rounded-2xl border px-3 py-2 text-xs font-semibold transition ${
+                      form.resultado === result ? 'border-[#2f5d50] bg-[#2f5d50] text-white' : 'border-stone-200 bg-white text-stone-600 hover:border-stone-300'
+                    }`}
+                  >
+                    {RESULTADO_LABEL[result]}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="grid gap-4 sm:grid-cols-2">
+              <Field label="Unidades inspeccionadas">
+                <input type="number" min="1" value={form.unidades_inspeccionadas} onChange={(e) => setForm((current) => ({ ...current, unidades_inspeccionadas: e.target.value }))} className="w-full rounded-2xl border border-stone-200 bg-white px-4 py-3 text-stone-700 outline-none transition focus:border-emerald-700 focus:ring-4 focus:ring-emerald-100" />
+              </Field>
+              <Field label="Unidades defectuosas">
+                <input type="number" min="0" value={form.unidades_defectuosas} onChange={(e) => setForm((current) => ({ ...current, unidades_defectuosas: e.target.value }))} className="w-full rounded-2xl border border-stone-200 bg-white px-4 py-3 text-stone-700 outline-none transition focus:border-emerald-700 focus:ring-4 focus:ring-emerald-100" />
+              </Field>
+            </div>
+
+            <Field label="Observaciones">
+              <textarea rows={4} value={form.observaciones} onChange={(e) => setForm((current) => ({ ...current, observaciones: e.target.value }))} className="w-full rounded-2xl border border-stone-200 bg-white px-4 py-3 text-stone-700 outline-none transition focus:border-emerald-700 focus:ring-4 focus:ring-emerald-100" />
+            </Field>
+
+            <Field label="Justificacion de override">
+              <textarea rows={3} value={form.override_reason} onChange={(e) => setForm((current) => ({ ...current, override_reason: e.target.value }))} className="w-full rounded-2xl border border-stone-200 bg-white px-4 py-3 text-stone-700 outline-none transition focus:border-emerald-700 focus:ring-4 focus:ring-emerald-100" />
+            </Field>
+          </div>
+        </div>
+
+        {error ? <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div> : null}
+
+        <div className="flex justify-end gap-3 border-t border-stone-200 pt-5">
+          <button type="button" onClick={onClose} className="rounded-2xl border border-stone-300 px-5 py-3 text-sm font-semibold text-stone-700 transition hover:bg-stone-50">
+            Cancelar
+          </button>
+          <button type="button" onClick={handleSave} disabled={saving} className="rounded-2xl bg-[#2f5d50] px-5 py-3 text-sm font-semibold text-white shadow-md transition hover:bg-[#264c42] disabled:opacity-60">
+            {saving ? 'Guardando...' : 'Guardar inspeccion'}
+          </button>
+        </div>
+      </div>
+    </Modal>
+  )
+}
+
+function ReceptionMeasurementField({ rule, value, onChange }) {
+  if (rule.measurement_type === 'numeric') {
+    return <input type="number" step="0.01" value={value.actual_numeric ?? ''} onChange={(e) => onChange({ ...value, actual_numeric: e.target.value })} className="w-full rounded-2xl border border-stone-200 px-4 py-2.5 text-sm focus:border-emerald-700 focus:outline-none" />
+  }
+
+  if (rule.measurement_type === 'boolean') {
+    return (
+      <select value={value.actual_boolean == null ? '' : value.actual_boolean ? 'true' : 'false'} onChange={(e) => onChange({ ...value, actual_boolean: e.target.value === '' ? null : e.target.value === 'true' })} className="w-full rounded-2xl border border-stone-200 px-4 py-2.5 text-sm focus:border-emerald-700 focus:outline-none">
+        <option value="">Seleccionar...</option>
+        <option value="true">Cumple</option>
+        <option value="false">No cumple</option>
+      </select>
+    )
+  }
+
+  if (rule.measurement_type === 'select') {
+    return <input value={value.actual_text || ''} onChange={(e) => onChange({ ...value, actual_text: e.target.value })} placeholder={`Permitidos: ${(rule.allowed_values || []).join(', ')}`} className="w-full rounded-2xl border border-stone-200 px-4 py-2.5 text-sm focus:border-emerald-700 focus:outline-none" />
+  }
+
+  return <input type="number" min="0" step="1" value={value.actual_count ?? ''} onChange={(e) => onChange({ ...value, actual_count: e.target.value })} className="w-full rounded-2xl border border-stone-200 px-4 py-2.5 text-sm focus:border-emerald-700 focus:outline-none" />
 }
 
 function Field({ label, children }) {
