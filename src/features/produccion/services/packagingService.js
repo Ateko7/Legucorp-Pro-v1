@@ -108,6 +108,8 @@ function mapProcessedLot(row) {
     accumulated_cost: numberOrZero(row.accumulated_cost),
     location: row.location || '',
     status: row.status || 'disponible',
+    bloqueado_calidad: Boolean(row.bloqueado_calidad),
+    motivo_bloqueo_calidad: row.motivo_bloqueo_calidad || '',
     created_at: row.created_at,
     material_name: row.materials?.common_name || '',
     material_code: row.materials?.code || '',
@@ -125,6 +127,12 @@ function mapPackagingLot(row) {
     unit_cost: numberOrZero(row.unit_cost),
     status: row.status || 'disponible',
   };
+}
+
+function ensureProcessedLotNotBlocked(lot) {
+  if (lot?.bloqueado_calidad || lot?.status === 'bloqueado') {
+    throw new Error(`El lote procesado ${lot.internal_lot} está bloqueado por calidad.${lot?.motivo_bloqueo_calidad ? ` Motivo: ${lot.motivo_bloqueo_calidad}` : ''}`);
+  }
 }
 
 function groupProcessedLotsByMaterial(lots) {
@@ -275,6 +283,7 @@ export async function getPackagingFormData() {
       `)
       .eq('organization_id', profile.organization_id)
       .gt('available_quantity', 0)
+      .eq('bloqueado_calidad', false)
       .in('status', ['disponible', 'parcial'])
       .order('created_at', { ascending: true }),
 
@@ -406,6 +415,8 @@ export async function createPackagingRunStrictRecipe({
     const selectedLotsForMaterial = availableLotsForMaterial.filter((lot) =>
       selectedIds.includes(lot.id)
     );
+
+    selectedLotsForMaterial.forEach(ensureProcessedLotNotBlocked);
 
     if (!selectedLotsForMaterial.length) {
       throw new Error(`No hay lotes válidos seleccionados para ${req.material_name}.`);

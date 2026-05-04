@@ -31,6 +31,12 @@ async function getProfile() {
   return profile
 }
 
+function ensureLotNotBlocked(row, label) {
+  if (row?.bloqueado_calidad) {
+    throw new Error(`${label} está bloqueado por calidad.${row?.motivo_bloqueo_calidad ? ` Motivo: ${row.motivo_bloqueo_calidad}` : ''}`)
+  }
+}
+
 /* =====================================================
    CREAR PROCESO INICIAL
 ===================================================== */
@@ -48,6 +54,8 @@ export async function createInitialProcessRun({
     .select('*')
     .eq('id', sourceInventoryLotId)
     .single()
+
+  ensureLotNotBlocked(lot, 'El lote de materia prima')
 
   const inputQty = numberOrZero(lot.available_quantity)
 
@@ -136,6 +144,8 @@ export async function advanceOutputToNextStage({
     .eq('id', sourceOutputId)
     .single()
 
+  ensureLotNotBlocked(source, 'El sublote de proceso')
+
   const inheritedLot = source.material_process_runs?.source_inventory_lot_id
 
   if (!inheritedLot) {
@@ -200,6 +210,8 @@ export async function getOutputSettlementPreview(outputId) {
     `)
     .eq('id', outputId)
     .single()
+
+  ensureLotNotBlocked(output, 'El sublote de proceso')
 
   const lotId = output.material_process_runs?.source_inventory_lot_id
 
@@ -365,9 +377,9 @@ export async function getProcesosMpDashboardData() {
 
   const { data: inventoryLots } = await supabase
     .from('material_inventory_lots')
-    .select(`
-      *,
-      suppliers (
+      .select(`
+        *,
+        suppliers (
         id,
         name
       ),
@@ -379,24 +391,26 @@ export async function getProcesosMpDashboardData() {
         category
       )
     `)
-    .eq('organization_id', profile.organization_id)
-    .gt('available_quantity', 0)
-    .order('created_at', { ascending: false })
+      .eq('organization_id', profile.organization_id)
+      .gt('available_quantity', 0)
+      .eq('bloqueado_calidad', false)
+      .order('created_at', { ascending: false })
 
   const { data: outputs } = await supabase
     .from('material_process_stage_outputs')
-    .select(`
-      *,
-      materials (
+      .select(`
+        *,
+        materials (
         id,
         code,
         common_name
       )
     `)
-    .eq('organization_id', profile.organization_id)
-    .eq('sent_to_processed_inventory', false)
-    .eq('was_used', false)
-    .order('created_at', { ascending: false })
+      .eq('organization_id', profile.organization_id)
+      .eq('sent_to_processed_inventory', false)
+      .eq('was_used', false)
+      .eq('bloqueado_calidad', false)
+      .order('created_at', { ascending: false })
 
 
   const { data: runs } = await supabase

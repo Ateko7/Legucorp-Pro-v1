@@ -451,6 +451,34 @@ export async function releaseReception(receptionId) {
     }
   }
 
+  const { data: qualityInspection, error: inspectionError } = await supabase
+    .from('inspecciones_calidad')
+    .select('resultado, observaciones')
+    .eq('source_reception_id', receptionId)
+    .eq('inspection_stage', 'recepcion_mp')
+    .eq('status', 'completada')
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle()
+
+  if (inspectionError) {
+    throw new Error(inspectionError.message || 'No se pudo validar la inspección de calidad de la recepción')
+  }
+
+  if (qualityInspection && ['retenido', 'rechazado'].includes(qualityInspection.resultado)) {
+    const { error: blockError } = await supabase
+      .from('material_inventory_lots')
+      .update({
+        bloqueado_calidad: true,
+        motivo_bloqueo_calidad: `Inspección ${qualityInspection.resultado}: ${qualityInspection.observaciones || ''}`.trim(),
+      })
+      .eq('reception_id', receptionId)
+
+    if (blockError) {
+      throw new Error(blockError.message || 'No se pudo bloquear por calidad el lote liberado')
+    }
+  }
+
   return data
 }
 
