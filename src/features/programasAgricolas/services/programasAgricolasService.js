@@ -41,6 +41,19 @@ function getProgramDateLabel(program) {
     : `${program.start_date} → Indefinido`
 }
 
+function receptionMatchesProgramWindow(program, reception) {
+  if (!reception?.received_date || reception.received_date < program.start_date) return false
+  if (!hasDefinedEndDate(program)) return true
+  return reception.received_date <= program.end_date
+}
+
+function getProgramReceptions(program, receptions = []) {
+  return (receptions || []).filter((row) => (
+    row?.supplier_id === program.supplier_id
+    && receptionMatchesProgramWindow(program, row)
+  ))
+}
+
 function buildPrimaryProgramUnit(items = [], fallbackUnit = 'lb') {
   const units = [...new Set(items.map((item) => String(item.unit || '').trim()).filter(Boolean))]
   if (units.length === 1) return units[0]
@@ -198,20 +211,11 @@ function computeDeliveryStatus(delivery, today) {
 
 function buildProgramAlerts(program, today) {
   const alerts = []
-  const deliveries = (program.programa_entregas || []).map((row) => computeDeliveryStatus(row, today))
-  const totalPlanned = round4(deliveries.reduce((acc, row) => acc + n(row.planned_quantity), 0))
-  const totalReceived = round4(deliveries.reduce((acc, row) => acc + n(row.received_quantity), 0))
+  const totalCommitted = n(program.quantity_committed_total)
+  const totalReceived = n(program.delivered_total)
 
-  if (totalReceived < totalPlanned) {
-    alerts.push({ level: 'danger', type: 'subentrega_acumulada', message: `Acumulado recibido menor al plan por ${round4(totalPlanned - totalReceived)} ${program.unit}.` })
-  }
-  if (totalReceived > n(program.quantity_committed_total)) {
-    alerts.push({ level: 'danger', type: 'sobreentrega_acumulada', message: `El acumulado supera lo comprometido por ${round4(totalReceived - n(program.quantity_committed_total))} ${program.unit}.` })
-  }
-
-  const futureWithoutPo = deliveries.filter((row) => row.scheduled_date >= today && row.scheduled_date <= addDays(today, 7) && !row.purchase_order_id && row.computed_status === 'pendiente')
-  if (futureWithoutPo.length) {
-    alerts.push({ level: 'warning', type: 'sin_oc_cercana', message: `${futureWithoutPo.length} entrega(s) próximas aún sin orden de compra.` })
+  if (totalReceived > totalCommitted) {
+    alerts.push({ level: 'danger', type: 'sobreentrega_acumulada', message: `El acumulado supera lo comprometido por ${round4(totalReceived - totalCommitted)} ${program.unit}.` })
   }
 
   const hasEndDate = hasDefinedEndDate(program)
@@ -225,19 +229,10 @@ function buildProgramAlerts(program, today) {
   }
 
   const daysToEnd = hasEndDate ? Math.ceil((new Date(`${program.end_date}T00:00:00`) - new Date(`${today}T00:00:00`)) / 86400000) : null
-  const pending = Math.max(0, n(program.quantity_committed_total) - totalReceived)
+  const pending = Math.max(0, totalCommitted - totalReceived)
   if (hasEndDate && daysToEnd <= 14 && pending > 0) {
     alerts.push({ level: 'warning', type: 'faltante_cierre', message: `Faltan ${round4(pending)} ${program.unit} y el programa vence en ${Math.max(daysToEnd, 0)} día(s).` })
   }
-
-  deliveries.forEach((delivery) => {
-    if (n(delivery.received_quantity) < n(delivery.planned_quantity) && n(delivery.received_quantity) > 0) {
-      alerts.push({ level: 'danger', type: 'subentrega', message: `${delivery.material_name || 'Variedad'} ${delivery.scheduled_date}: subentrega de ${round4(n(delivery.planned_quantity) - n(delivery.received_quantity))} ${delivery.unit || program.unit}.` })
-    }
-    if (n(delivery.received_quantity) > n(delivery.planned_quantity)) {
-      alerts.push({ level: 'danger', type: 'sobreentrega', message: `${delivery.material_name || 'Variedad'} ${delivery.scheduled_date}: sobreentrega de ${round4(n(delivery.received_quantity) - n(delivery.planned_quantity))} ${delivery.unit || program.unit}.` })
-    }
-  })
 
   return alerts
 }
@@ -245,59 +240,11 @@ function buildProgramAlerts(program, today) {
 function enrichProgram(program, receptions = []) {
   const today = new Date().toISOString().slice(0, 10)
   const items = getNormalizedProgramItems(program)
-  const itemById = new Map(items.map((item) => [item.id, item]))
-  const itemByMaterialId = new Map(items.map((item) => [item.material_id, item]))
-  const receptionByDelivery = new Map()
-  const orphanByMaterial = new Map()
-
-  ;(receptions || []).forEach((row) => {
-    const qty = receptionQty(row)
-    if (row?.programa_entrega_id) {
-      receptionByDelivery.set(
-        row.programa_entrega_id,
-        round4(n(receptionByDelivery.get(row.programa_entrega_id)) + qty),
-      )
-      return
-    }
-
-    if (row?.material_id) {
-      orphanByMaterial.set(row.material_id, round4(n(orphanByMaterial.get(row.material_id)) + qty))
-    }
-  })
-
-  const deliveries = (program.programa_entregas || [])
-    .map((row) => {
-      const matchedItem = row.programa_item_id ? itemById.get(row.programa_item_id) : itemByMaterialId.get(row.material_id)
-      const material = row.materials || matchedItem?.materials || null
-      const receivedFromReceptions = receptionByDelivery.get(row.id)
-
-      return {
-        ...row,
-        programa_item_id: row.programa_item_id || matchedItem?.id || null,
-        material_id: row.material_id || matchedItem?.material_id || program.material_id,
-        materials: material,
-        material_name: material?.common_name || matchedItem?.material_name || program.materials?.common_name || 'Materia prima',
-        unit: row.unit || matchedItem?.unit || program.unit || material?.base_unit || 'lb',
-        received_quantity: receivedFromReceptions != null ? receivedFromReceptions : row.received_quantity,
-      }
-    })
-    .map((row) => computeDeliveryStatus(row, today))
-    .sort((a, b) => {
-      const dateCompare = String(a.scheduled_date).localeCompare(String(b.scheduled_date))
-      if (dateCompare !== 0) return dateCompare
-      return String(a.material_name || '').localeCompare(String(b.material_name || ''))
-    })
+  const matchedReceptions = getProgramReceptions(program, receptions)
 
   const enrichedItems = items.map((item) => {
-    const itemDeliveries = deliveries.filter((delivery) => (
-      delivery.programa_item_id
-        ? delivery.programa_item_id === item.id
-        : delivery.material_id === item.material_id
-    ))
-    const orderedTotal = round4(itemDeliveries.reduce((acc, delivery) => acc + n(delivery.ordered_quantity), 0))
-    const deliveredFromDeliveries = round4(itemDeliveries.reduce((acc, delivery) => acc + n(delivery.received_quantity), 0))
-    const orphanDelivered = round4(orphanByMaterial.get(item.material_id) || 0)
-    const deliveredTotal = round4(deliveredFromDeliveries + orphanDelivered)
+    const itemReceptions = matchedReceptions.filter((row) => row.material_id === item.material_id)
+    const deliveredTotal = round4(itemReceptions.reduce((acc, row) => acc + receptionQty(row), 0))
     const committedTotal = round4(item.quantity_committed_total)
     const pendingTotal = round4(Math.max(0, committedTotal - deliveredTotal))
     const compliancePct = committedTotal > 0 ? round4((deliveredTotal / committedTotal) * 100) : 0
@@ -306,8 +253,8 @@ function enrichProgram(program, receptions = []) {
       ...item,
       material_name: item.materials?.common_name || 'Materia prima',
       material_code: item.materials?.code || '',
-      deliveries: itemDeliveries,
-      ordered_total: orderedTotal,
+      deliveries: [],
+      ordered_total: 0,
       delivered_total: deliveredTotal,
       pending_total: pendingTotal,
       compliance_pct: compliancePct,
@@ -316,18 +263,18 @@ function enrichProgram(program, receptions = []) {
 
   const committedTotal = round4(enrichedItems.reduce((acc, item) => acc + n(item.quantity_committed_total), 0))
   const deliveredTotal = round4(enrichedItems.reduce((acc, item) => acc + n(item.delivered_total), 0))
-  const orderedTotal = round4(deliveries.reduce((acc, row) => acc + n(row.ordered_quantity), 0))
+  const orderedTotal = 0
   const pendingTotal = round4(Math.max(0, committedTotal - deliveredTotal))
   const compliancePct = committedTotal > 0 ? round4((deliveredTotal / committedTotal) * 100) : 0
   const unit = buildPrimaryProgramUnit(enrichedItems, program.unit)
   const primaryItem = enrichedItems[0] || null
   const materialLabels = buildProgramMaterialLabels(enrichedItems, program.materials?.common_name || 'Materia prima')
   const deliveryStats = {
-    cumplidas: deliveries.filter((row) => row.computed_status === 'cumplida').length,
-    parciales: deliveries.filter((row) => row.computed_status === 'parcial').length,
-    incumplidas: deliveries.filter((row) => row.computed_status === 'incumplida').length,
-    reprogramadas: deliveries.filter((row) => row.computed_status === 'reprogramada').length,
-    sobreentregas: deliveries.filter((row) => row.computed_status === 'sobreentrega').length,
+    cumplidas: enrichedItems.filter((item) => item.compliance_pct >= 100).length,
+    parciales: enrichedItems.filter((item) => item.compliance_pct > 0 && item.compliance_pct < 100).length,
+    incumplidas: enrichedItems.filter((item) => item.compliance_pct <= 0).length,
+    reprogramadas: 0,
+    sobreentregas: enrichedItems.filter((item) => item.compliance_pct > 100).length,
   }
 
   const hasEndDate = hasDefinedEndDate(program)
@@ -355,11 +302,12 @@ function enrichProgram(program, receptions = []) {
     delivery_stats: deliveryStats,
     time_progress_pct: timeProgressPct,
     volume_progress_pct: volumeProgressPct,
+    matched_receptions: matchedReceptions,
     alerts: buildProgramAlerts({
       ...program,
       unit,
       quantity_committed_total: committedTotal,
-      programa_entregas: deliveries,
+      delivered_total: deliveredTotal,
     }, today),
   }
 }
@@ -417,29 +365,19 @@ export async function getProgramasAgricolas() {
       .order('created_at', { ascending: false }),
     supabase
       .from('material_receptions')
-      .select('programa_agricola_id, programa_entrega_id, material_id, quantity_received, quantity_accepted')
-      .eq('organization_id', profile.organization_id)
-      .not('programa_agricola_id', 'is', null),
+      .select('id, supplier_id, material_id, received_date, quantity_received, quantity_accepted')
+      .eq('organization_id', profile.organization_id),
   ])
 
   if (programsRes.error) throw new Error(programsRes.error.message)
   if (receptionsRes.error) throw new Error(receptionsRes.error.message)
 
-  const receptionsByProgram = new Map()
-  ;(receptionsRes.data || []).forEach((row) => {
-    const key = row.programa_agricola_id
-    if (!key) return
-    const current = receptionsByProgram.get(key) || []
-    current.push(row)
-    receptionsByProgram.set(key, current)
-  })
-
-  return (programsRes.data || []).map((program) => enrichProgram(program, receptionsByProgram.get(program.id) || []))
+  return (programsRes.data || []).map((program) => enrichProgram(program, receptionsRes.data || []))
 }
 
 export async function getProgramaAgricolaDetail(programId) {
   const profile = await getProfile()
-  const [programRes, receptionsRes, lotsRes, adjustmentsRes] = await Promise.all([
+  const [programRes, receptionsRes, adjustmentsRes] = await Promise.all([
     supabase
       .from('programas_agricolas')
       .select(PROGRAM_SELECT)
@@ -456,9 +394,25 @@ export async function getProgramaAgricolaDetail(programId) {
         profiles:created_by ( id, full_name )
       `)
       .eq('organization_id', profile.organization_id)
-      .eq('programa_agricola_id', programId)
       .order('received_date', { ascending: false }),
     supabase
+      .from('programa_reajustes')
+      .select('*, profiles:created_by ( id, full_name )')
+      .eq('organization_id', profile.organization_id)
+      .eq('programa_id', programId)
+      .order('adjustment_date', { ascending: false }),
+  ])
+
+  if (programRes.error) throw new Error(programRes.error.message)
+  if (receptionsRes.error) throw new Error(receptionsRes.error.message)
+  if (adjustmentsRes.error) throw new Error(adjustmentsRes.error.message)
+
+  const enriched = enrichProgram(programRes.data, receptionsRes.data || [])
+  const matchedReceptionIds = (enriched.matched_receptions || []).map((row) => row.id).filter(Boolean)
+  let inventoryLots = []
+
+  if (matchedReceptionIds.length) {
+    const { data: lotsData, error: lotsError } = await supabase
       .from('material_inventory_lots')
       .select(`
         id,
@@ -474,26 +428,17 @@ export async function getProgramaAgricolaDetail(programId) {
         materials ( id, code, common_name, base_unit )
       `)
       .eq('organization_id', profile.organization_id)
-      .eq('programa_agricola_id', programId)
-      .order('created_at', { ascending: false }),
-    supabase
-      .from('programa_reajustes')
-      .select('*, profiles:created_by ( id, full_name )')
-      .eq('organization_id', profile.organization_id)
-      .eq('programa_id', programId)
-      .order('adjustment_date', { ascending: false }),
-  ])
+      .in('reception_id', matchedReceptionIds)
+      .order('created_at', { ascending: false })
 
-  if (programRes.error) throw new Error(programRes.error.message)
-  if (receptionsRes.error) throw new Error(receptionsRes.error.message)
-  if (lotsRes.error) throw new Error(lotsRes.error.message)
-  if (adjustmentsRes.error) throw new Error(adjustmentsRes.error.message)
+    if (lotsError) throw new Error(lotsError.message)
+    inventoryLots = lotsData || []
+  }
 
-  const enriched = enrichProgram(programRes.data, receptionsRes.data || [])
   return {
     ...enriched,
-    receptions: receptionsRes.data || [],
-    inventoryLots: lotsRes.data || [],
+    receptions: enriched.matched_receptions || [],
+    inventoryLots,
     adjustments: adjustmentsRes.data || [],
   }
 }
@@ -592,27 +537,7 @@ async function syncProgramItems(profile, programId, items) {
 }
 
 function buildDeliveryRows(profile, syncedItems) {
-  return syncedItems.flatMap((item) => (
-    (item.deliveries || [])
-      .filter((row) => row.scheduled_date && n(row.planned_quantity) > 0)
-      .map((row) => ({
-        id: row.id || undefined,
-        organization_id: profile.organization_id,
-        programa_id: item.programa_id,
-        programa_item_id: item.id,
-        material_id: item.material_id,
-        scheduled_date: row.scheduled_date,
-        planned_quantity: round4(row.planned_quantity),
-        received_quantity: round4(row.received_quantity),
-        ordered_quantity: round4(row.ordered_quantity),
-        difference_quantity: round4(n(row.received_quantity) - n(row.planned_quantity)),
-        unit: item.unit,
-        status: row.status || 'pendiente',
-        purchase_order_id: row.purchase_order_id || null,
-        notes: row.notes || null,
-        created_by: profile.id,
-      }))
-  ))
+  return []
 }
 
 export async function saveProgramaAgricola(programData) {
