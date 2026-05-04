@@ -13,12 +13,15 @@ const SHEET_LABELS = {
   product_bases: 'Productos base',
   product_presentations: 'Presentaciones',
   client_prices: 'Precios cliente',
+  recipes: 'Recetas',
 }
 
 const TEMPLATE_NOTES = [
   'Llena solo las hojas que quieras importar. Las demas pueden quedarse vacias.',
   'El importador actualiza por NIT, codigo o nombre cuando encuentra registros existentes.',
   'Importa proveedores antes que materias primas para poder asignarlos como proveedor preferido.',
+  'La hoja de recetas actualiza la receta activa de cada SKU usando porcentaje por materia prima.',
+  'Las recetas requieren que el SKU ya exista en el sistema y que la suma por SKU sea exactamente 100%.',
   'Los precios por cliente desactivan el precio activo anterior para ese cliente y producto.',
   'Regimen fiscal de proveedor acepta: pequeno_contribuyente, pagos_trimestrales, sujeto_a_retencion.',
   'Categoria de materia prima acepta: materia_prima_vegetal, material_empaque, insumo_proceso, producto_granel, quimico_sanitizante, otros.',

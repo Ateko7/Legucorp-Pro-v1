@@ -112,6 +112,18 @@ const SHEETS = {
       notes: 'Precio inicial',
     },
   },
+  recipes: {
+    label: 'Recetas',
+    aliases: ['recipes', 'recetas'],
+    required: ['sku_name', 'material_name', 'percentage'],
+    sample: {
+      sku_name: 'Espinaca 8oz',
+      sku_code: '',
+      material_name: 'Espinaca',
+      material_code: '',
+      percentage: 100,
+    },
+  },
 }
 
 const VALID_MATERIAL_CATEGORIES = new Set([
@@ -199,10 +211,14 @@ function buildWorkbookMaps(data) {
   const maps = {
     clientsByName: new Map(),
     clientsByNit: new Map(),
+    skusByName: new Map(),
+    skusByCode: new Map(),
     productBasesByName: new Map(),
     productBasesByCode: new Map(),
     presentationsByName: new Map(),
     presentationsByCode: new Map(),
+    materialsByName: new Map(),
+    materialsByCode: new Map(),
   }
 
   ;(data.clients || []).forEach((row) => {
@@ -215,9 +231,19 @@ function buildWorkbookMaps(data) {
     if (text(row.code)) maps.productBasesByCode.set(normalizedKey(row.code), row)
   })
 
+  ;(data.materials || []).forEach((row) => {
+    if (text(row.common_name)) maps.materialsByName.set(normalizedKey(row.common_name), row)
+    if (text(row.code)) maps.materialsByCode.set(normalizedKey(row.code), row)
+  })
+
   ;(data.product_presentations || []).forEach((row) => {
     if (text(row.display_name)) maps.presentationsByName.set(normalizedKey(row.display_name), row)
     if (text(row.code)) maps.presentationsByCode.set(normalizedKey(row.code), row)
+  })
+
+  ;(data.recipes || []).forEach((row) => {
+    if (text(row.sku_name)) maps.skusByName.set(normalizedKey(row.sku_name), row)
+    if (text(row.sku_code)) maps.skusByCode.set(normalizedKey(row.sku_code), row)
   })
 
   return maps
@@ -308,6 +334,10 @@ export function validateWorkbookData(data) {
               ? text(row.client_name) || text(row.client_nit)
               : column === 'product_display_name'
                 ? text(row.product_display_name) || text(row.product_code)
+                : sheetName === 'recipes' && column === 'sku_name'
+                  ? text(row.sku_name) || text(row.sku_code)
+                  : sheetName === 'recipes' && column === 'material_name'
+                    ? text(row.material_name) || text(row.material_code)
                 : text(row[column])
 
         if (!hasValue) {
@@ -351,7 +381,45 @@ export function validateWorkbookData(data) {
           errors.push({ sheet: sheetName, row: row._row, message: 'Presentacion no encontrada en la hoja de presentaciones' })
         }
       }
+
+      if (sheetName === 'recipes') {
+        const hasSku = text(row.sku_code) || text(row.sku_name)
+        const hasMaterial = text(row.material_code) || text(row.material_name)
+
+        if (!hasSku) {
+          errors.push({ sheet: sheetName, row: row._row, message: 'Debes indicar sku_name o sku_code' })
+        }
+
+        if (!hasMaterial) {
+          errors.push({ sheet: sheetName, row: row._row, message: 'Debes indicar material_name o material_code' })
+        }
+
+        if (maybeNumber(row.percentage, null) == null || n(row.percentage) <= 0) {
+          errors.push({ sheet: sheetName, row: row._row, message: 'percentage debe ser mayor a 0' })
+        }
+      }
     })
+  })
+
+  const recipeGroups = new Map()
+  ;(data.recipes || []).forEach((row) => {
+    const skuKey = normalizedKey(text(row.sku_code) || text(row.sku_name))
+    if (!skuKey) return
+    if (!recipeGroups.has(skuKey)) recipeGroups.set(skuKey, [])
+    recipeGroups.get(skuKey).push(row)
+  })
+
+  recipeGroups.forEach((rows, skuKey) => {
+    const total = rows.reduce((acc, row) => acc + n(row.percentage), 0)
+    if (Math.abs(total - 100) > 0.01) {
+      rows.forEach((row) => {
+        errors.push({
+          sheet: 'recipes',
+          row: row._row,
+          message: `La receta para ${text(row.sku_code) || text(row.sku_name) || skuKey} debe sumar 100%. Actualmente suma ${total.toFixed(4)}%.`,
+        })
+      })
+    }
   })
 
   return { errors, counts }
@@ -372,15 +440,16 @@ async function getContext() {
 }
 
 async function loadReferenceData(organizationId) {
-  const [clients, materials, productBases, presentations, suppliers] = await Promise.all([
+  const [clients, materials, productBases, presentations, suppliers, skus] = await Promise.all([
     supabase.from('clients').select('id, commercial_name, nit').eq('organization_id', organizationId),
-    supabase.from('materials').select('id, code, common_name').eq('organization_id', organizationId),
+    supabase.from('materials').select('id, code, common_name, category').eq('organization_id', organizationId),
     supabase.from('product_bases').select('id, code, common_name').eq('organization_id', organizationId),
     supabase.from('product_presentations').select('id, code, display_name').eq('organization_id', organizationId),
     supabase.from('suppliers').select('id, name, nit').eq('organization_id', organizationId),
+    supabase.from('skus').select('id, code, common_name, status').eq('organization_id', organizationId),
   ])
 
-  for (const result of [clients, materials, productBases, presentations, suppliers]) {
+  for (const result of [clients, materials, productBases, presentations, suppliers, skus]) {
     if (result.error) throw new Error(result.error.message)
   }
 
@@ -390,6 +459,7 @@ async function loadReferenceData(organizationId) {
     productBases: productBases.data || [],
     presentations: presentations.data || [],
     suppliers: suppliers.data || [],
+    skus: skus.data || [],
   }
 }
 
@@ -416,6 +486,8 @@ function buildMaps(refs) {
     presentationsByCode: new Map(),
     suppliersByName: new Map(),
     suppliersByNit: new Map(),
+    skusByName: new Map(),
+    skusByCode: new Map(),
   }
 
   refs.clients.forEach((item) => {
@@ -437,6 +509,10 @@ function buildMaps(refs) {
   refs.suppliers.forEach((item) => {
     map.suppliersByName.set(key(item.name), item)
     if (item.nit) map.suppliersByNit.set(key(item.nit), item)
+  })
+  refs.skus.forEach((item) => {
+    map.skusByName.set(key(item.common_name), item)
+    if (item.code) map.skusByCode.set(key(item.code), item)
   })
 
   return map
@@ -737,6 +813,110 @@ async function upsertClientPrices(rows, context, maps, log) {
   }
 }
 
+async function upsertRecipes(rows, context, maps, log) {
+  const grouped = new Map()
+
+  for (const row of rows) {
+    const sku = (text(row.sku_code) && maps.skusByCode.get(key(row.sku_code))) ||
+      maps.skusByName.get(key(row.sku_name))
+    if (!sku) throw new Error(`recipes row ${row._row}: sku not found`)
+    if (text(sku.status) && text(sku.status) !== 'activo') {
+      throw new Error(`recipes row ${row._row}: sku is not active`)
+    }
+
+    const material = (text(row.material_code) && maps.materialsByCode.get(key(row.material_code))) ||
+      maps.materialsByName.get(key(row.material_name))
+    if (!material) throw new Error(`recipes row ${row._row}: material not found`)
+    if (!['materia_prima_vegetal', 'producto_granel'].includes(text(material.category))) {
+      throw new Error(`recipes row ${row._row}: material category is not valid for recipes`)
+    }
+
+    if (!grouped.has(sku.id)) {
+      grouped.set(sku.id, {
+        sku,
+        rows: [],
+        materials: new Set(),
+      })
+    }
+
+    const bucket = grouped.get(sku.id)
+    const materialKey = String(material.id)
+    if (bucket.materials.has(materialKey)) {
+      throw new Error(`recipes row ${row._row}: duplicated material for sku ${sku.common_name}`)
+    }
+
+    bucket.materials.add(materialKey)
+    bucket.rows.push({
+      rowNumber: row._row,
+      material,
+      percentage: Number(row.percentage),
+    })
+  }
+
+  for (const { sku, rows: skuRows } of grouped.values()) {
+    const total = skuRows.reduce((acc, row) => acc + Number(row.percentage || 0), 0)
+    if (Math.abs(total - 100) > 0.01) {
+      throw new Error(`recipes rows for ${sku.common_name}: recipe total must equal 100%. Current total ${total.toFixed(4)}%`)
+    }
+
+    const { data: currentRecipeRows, error: currentError } = await supabase
+      .from('sku_recipes')
+      .select('material_id, percentage')
+      .eq('sku_id', sku.id)
+      .eq('organization_id', context.organizationId)
+      .eq('is_active', true)
+
+    if (currentError) throw new Error(`recipes for ${sku.common_name}: ${currentError.message}`)
+
+    const snapshot = {
+      previous: currentRecipeRows || [],
+      next: skuRows.map((row) => ({
+        material_id: row.material.id,
+        percentage: Number(row.percentage),
+      })),
+      changed_at: new Date().toISOString(),
+    }
+
+    const { error: historyError } = await supabase
+      .from('sku_recipe_history')
+      .insert({
+        organization_id: context.organizationId,
+        sku_id: sku.id,
+        recipe_snapshot: snapshot,
+        changed_by: context.userId,
+      })
+
+    if (historyError) throw new Error(`recipes for ${sku.common_name}: ${historyError.message}`)
+
+    const { error: deactivateError } = await supabase
+      .from('sku_recipes')
+      .update({ is_active: false })
+      .eq('sku_id', sku.id)
+      .eq('organization_id', context.organizationId)
+      .eq('is_active', true)
+
+    if (deactivateError) throw new Error(`recipes for ${sku.common_name}: ${deactivateError.message}`)
+
+    const insertRows = skuRows.map((row) => ({
+      organization_id: context.organizationId,
+      sku_id: sku.id,
+      material_id: row.material.id,
+      percentage: Number(row.percentage),
+      is_active: true,
+      created_by: context.userId,
+    }))
+
+    const { error: insertError } = await supabase
+      .from('sku_recipes')
+      .insert(insertRows)
+
+    if (insertError) throw new Error(`recipes for ${sku.common_name}: ${insertError.message}`)
+
+    if ((currentRecipeRows || []).length) log.updated += 1
+    else log.created += 1
+  }
+}
+
 export async function importWorkbookData(data) {
   const validation = validateWorkbookData(data)
   if (validation.errors.length) {
@@ -753,6 +933,7 @@ export async function importWorkbookData(data) {
     product_bases: { created: 0, updated: 0 },
     product_presentations: { created: 0, updated: 0 },
     client_prices: { created: 0, updated: 0 },
+    recipes: { created: 0, updated: 0 },
   }
 
   await upsertSuppliers(data.suppliers || [], context, maps, summary.suppliers)
@@ -761,6 +942,7 @@ export async function importWorkbookData(data) {
   await upsertProductBases(data.product_bases || [], context, maps, summary.product_bases)
   await upsertProductPresentations(data.product_presentations || [], context, maps, summary.product_presentations)
   await upsertClientPrices(data.client_prices || [], context, maps, summary.client_prices)
+  await upsertRecipes(data.recipes || [], context, maps, summary.recipes)
 
   return summary
 }
