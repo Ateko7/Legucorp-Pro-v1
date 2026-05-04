@@ -30,6 +30,18 @@ const EQUIPMENT_CATEGORIES = [
   'otro',
 ]
 
+const TIME_FREQUENCY_OPTIONS = [
+  { value: 'diario', label: 'Diario' },
+  { value: 'semanal', label: 'Semanal' },
+  { value: 'quincenal', label: 'Quincenal' },
+  { value: 'mensual', label: 'Mensual' },
+  { value: 'bimensual', label: 'Bimensual' },
+  { value: 'trimestral', label: 'Trimestral' },
+  { value: 'semestral', label: 'Semestral' },
+  { value: 'anual', label: 'Anual' },
+  { value: 'personalizado', label: 'Personalizado' },
+]
+
 const emptyEquipment = {
   name: '',
   category: 'centrifuga',
@@ -119,6 +131,25 @@ function fmtQ(value) {
 function fmtDate(value) {
   if (!value) return '-'
   return new Date(`${String(value).slice(0, 10)}T00:00:00`).toLocaleDateString('es-GT')
+}
+
+function getTimeFrequencyLabel(value, customDays = null) {
+  if (value === 'personalizado') return customDays ? `Cada ${customDays} dias` : 'Personalizado'
+  return TIME_FREQUENCY_OPTIONS.find((option) => option.value === value)?.label || value || '-'
+}
+
+function getFrequencySummary(plan) {
+  if (!plan) return '-'
+
+  if (plan.frequency_type === 'time') {
+    return `Por tiempo · ${getTimeFrequencyLabel(plan.time_frequency, plan.custom_days)}`
+  }
+
+  if (plan.frequency_type === 'usage') {
+    return `Por uso · cada ${plan.usage_interval || '-'} ${plan.usage_frequency_type || 'unidades'}`
+  }
+
+  return `Mixto · ${getTimeFrequencyLabel(plan.time_frequency, plan.custom_days)} + cada ${plan.usage_interval || '-'} ${plan.usage_frequency_type || 'unidades'}`
 }
 
 function toneClass(semaphore) {
@@ -310,14 +341,7 @@ function PlanForm({ form, setForm, users }) {
       {['time', 'mixed'].includes(form.frequency_type) ? (
         <Field label="Frecuencia por tiempo">
           <select value={form.time_frequency} onChange={(event) => setForm((prev) => ({ ...prev, time_frequency: event.target.value }))} className={INPUT}>
-            <option value="diario">Diario</option>
-            <option value="semanal">Semanal</option>
-            <option value="quincenal">Quincenal</option>
-            <option value="mensual">Mensual</option>
-            <option value="trimestral">Trimestral</option>
-            <option value="semestral">Semestral</option>
-            <option value="anual">Anual</option>
-            <option value="personalizado">Personalizado</option>
+            {TIME_FREQUENCY_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
           </select>
         </Field>
       ) : null}
@@ -483,7 +507,12 @@ export default function MantenimientoPage() {
   }
 
   function openPlan(equipment) {
-    setPlanForm({ ...emptyPlan, equipment_id: equipment.id, suggested_responsible_user_id: equipment.responsible_user_id || '' })
+    setPlanForm({
+      ...emptyPlan,
+      equipment_id: equipment.id,
+      suggested_responsible_user_id: equipment.responsible_user_id || '',
+      next_scheduled_date: new Date().toISOString().slice(0, 10),
+    })
     setChecklistItems([{ item_label: 'Estado general del equipo', response_type: 'check', required: true }])
     setPlanModal(true)
   }
@@ -553,6 +582,19 @@ export default function MantenimientoPage() {
     setError('')
     setSuccess('')
     try {
+      if (['time', 'mixed'].includes(planForm.frequency_type) && !planForm.next_scheduled_date) {
+        throw new Error('Debes indicar la primera fecha programada para un plan por tiempo.')
+      }
+      if (['usage', 'mixed'].includes(planForm.frequency_type) && n(planForm.usage_interval) <= 0) {
+        throw new Error('Debes indicar un intervalo de uso mayor a 0.')
+      }
+      if (
+        ['time', 'mixed'].includes(planForm.frequency_type)
+        && planForm.time_frequency === 'personalizado'
+        && n(planForm.custom_days) <= 0
+      ) {
+        throw new Error('Debes indicar los dias personalizados para la frecuencia por tiempo.')
+      }
       await createMaintenancePlan(planForm, checklistItems)
       setPlanModal(false)
       setSuccess('Plan de mantenimiento creado.')
@@ -819,7 +861,7 @@ export default function MantenimientoPage() {
                         <div className="flex items-start justify-between gap-3">
                           <div>
                             <p className="font-semibold text-stone-900">{plan.name}</p>
-                            <p className="text-sm text-stone-500">{maintenanceLabels.maintenanceType[plan.maintenance_type]} · {plan.frequency_type}</p>
+                            <p className="text-sm text-stone-500">{maintenanceLabels.maintenanceType[plan.maintenance_type]} · {getFrequencySummary(plan)}</p>
                             <p className="mt-1 text-sm text-stone-600">Fecha: {fmtDate(plan.next_scheduled_date)} · Uso objetivo: {plan.next_usage_target || '-'}</p>
                           </div>
                           <button onClick={() => openOrder(selectedEquipment, plan)} className="rounded-lg bg-[#2f5d50] px-3 py-2 text-sm font-semibold text-white hover:bg-[#274d43]">Crear orden</button>

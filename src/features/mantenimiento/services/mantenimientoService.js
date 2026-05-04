@@ -1,13 +1,14 @@
 import { supabase } from '../../../lib/supabase'
 
-const TIME_DAYS = {
-  diario: 1,
-  semanal: 7,
-  quincenal: 15,
-  mensual: 30,
-  trimestral: 90,
-  semestral: 180,
-  anual: 365,
+const TIME_INTERVALS = {
+  diario: { days: 1 },
+  semanal: { days: 7 },
+  quincenal: { days: 15 },
+  mensual: { months: 1 },
+  bimensual: { months: 2 },
+  trimestral: { months: 3 },
+  semestral: { months: 6 },
+  anual: { years: 1 },
 }
 
 function n(value) {
@@ -32,9 +33,22 @@ function addDays(date, days) {
   return base.toISOString().slice(0, 10)
 }
 
-function getPlanIntervalDays(plan) {
-  if (plan.time_frequency === 'personalizado') return n(plan.custom_days)
-  return TIME_DAYS[plan.time_frequency] || 0
+function addCalendarInterval(date, interval = {}) {
+  const base = date ? new Date(`${date}T00:00:00`) : new Date()
+  if (n(interval.days) > 0) base.setDate(base.getDate() + n(interval.days))
+  if (n(interval.months) > 0) base.setMonth(base.getMonth() + n(interval.months))
+  if (n(interval.years) > 0) base.setFullYear(base.getFullYear() + n(interval.years))
+  return base.toISOString().slice(0, 10)
+}
+
+function getNextScheduledDate(baseDate, plan) {
+  if (!plan || !['time', 'mixed'].includes(plan.frequency_type)) return null
+  if (plan.time_frequency === 'personalizado') {
+    return n(plan.custom_days) > 0 ? addDays(baseDate, plan.custom_days) : null
+  }
+
+  const interval = TIME_INTERVALS[plan.time_frequency]
+  return interval ? addCalendarInterval(baseDate, interval) : null
 }
 
 async function getProfile() {
@@ -613,9 +627,9 @@ export async function closeWorkOrder(workOrder, payload, checklistResponses = []
   if (error) throw new Error(error.message || 'No se pudo cerrar el mantenimiento')
 
   if (plan) {
-    const intervalDays = getPlanIntervalDays(plan)
     const updatePlan = {}
-    if (intervalDays > 0) updatePlan.next_scheduled_date = addDays(payload.actual_execution_date || today(), intervalDays)
+    const nextScheduledDate = getNextScheduledDate(payload.actual_execution_date || today(), plan)
+    if (nextScheduledDate) updatePlan.next_scheduled_date = nextScheduledDate
     if (n(plan.usage_interval) > 0) {
       const { data: equipment } = await supabase
         .from('maintenance_equipment')
