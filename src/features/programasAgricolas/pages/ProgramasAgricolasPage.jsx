@@ -64,7 +64,7 @@ const emptyForm = {
   supplier_id: '',
   program_code: '',
   start_date: today,
-  end_date: today,
+  end_date: '',
   delivery_frequency: 'semanal',
   status: 'borrador',
   notes: '',
@@ -185,6 +185,7 @@ export default function ProgramasAgricolasPage() {
     () => (programForm.items || []).reduce((acc, item) => acc + n(item.quantity_committed_total), 0),
     [programForm.items],
   )
+  const programIsOpenEnded = !programForm.end_date
 
   function findMaterial(materialId) {
     return catalogs.materials.find((row) => row.id === materialId) || null
@@ -212,7 +213,7 @@ export default function ProgramasAgricolasPage() {
       supplier_id: detail.supplier_id,
       program_code: detail.program_code,
       start_date: detail.start_date,
-      end_date: detail.end_date,
+      end_date: detail.end_date || '',
       delivery_frequency: detail.delivery_frequency,
       status: detail.status,
       notes: detail.notes || '',
@@ -518,6 +519,7 @@ export default function ProgramasAgricolasPage() {
                           <div>
                             <div className="font-semibold text-stone-800">{program.program_code}</div>
                             <div className="text-sm text-stone-500">{program.suppliers?.name} · {program.material_labels}</div>
+                            <div className="mt-1 text-xs text-stone-400">{program.date_label}</div>
                           </div>
                           <span className={`rounded-full px-2.5 py-0.5 text-xs font-semibold ${program.status === 'activo' ? 'bg-emerald-100 text-emerald-700' : program.status === 'pausado' ? 'bg-amber-100 text-amber-700' : 'bg-stone-100 text-stone-600'}`}>{program.status}</span>
                         </div>
@@ -559,6 +561,7 @@ export default function ProgramasAgricolasPage() {
                           <div className="text-xs font-semibold uppercase tracking-widest text-stone-400">Detalle</div>
                           <h2 className="mt-1 text-2xl font-bold text-stone-900">{detail.program_code}</h2>
                           <p className="mt-1 text-sm text-stone-500">{detail.suppliers?.name} · {detail.material_labels}</p>
+                          <p className="mt-1 text-xs text-stone-400">{detail.date_label}</p>
                         </div>
                         <div className="flex flex-wrap gap-2">
                           <button onClick={openEdit} className="rounded-2xl border border-stone-200 px-4 py-2 text-sm font-semibold text-stone-700 hover:bg-stone-50">Editar</button>
@@ -570,7 +573,7 @@ export default function ProgramasAgricolasPage() {
                         <KpiCard label="Variedades" value={detail.materials_count || 0} hint="Dentro del mismo programa" />
                         <KpiCard label="Comprometido" value={`${fmt(detail.quantity_committed_total)} ${detail.unit}`} />
                         <KpiCard label="Entregado" value={`${fmt(detail.delivered_total)} ${detail.unit}`} tone="green" />
-                        <KpiCard label="% Cumplimiento" value={pct(detail.compliance_pct)} hint={`Tiempo ${pct(detail.time_progress_pct)} · Volumen ${pct(detail.volume_progress_pct)}`} />
+                        <KpiCard label="% Cumplimiento" value={pct(detail.compliance_pct)} hint={detail.is_open_ended ? `Volumen ${pct(detail.volume_progress_pct)} · Programa indefinido` : `Tiempo ${pct(detail.time_progress_pct)} · Volumen ${pct(detail.volume_progress_pct)}`} />
                       </div>
 
                       <div className="mt-4 grid gap-4 md:grid-cols-3">
@@ -792,7 +795,7 @@ export default function ProgramasAgricolasPage() {
             </label>
             <label className="space-y-2 text-sm">
               <span className="font-medium text-stone-700">Fin</span>
-              <input type="date" value={programForm.end_date} onChange={(e) => setProgramForm((prev) => ({ ...prev, end_date: e.target.value }))} className="w-full rounded-2xl border border-stone-300 bg-stone-50 px-4 py-3 outline-none focus:border-[#2f5d50]" />
+              <input type="date" value={programForm.end_date} disabled={programIsOpenEnded} onChange={(e) => setProgramForm((prev) => ({ ...prev, end_date: e.target.value }))} className={`w-full rounded-2xl border px-4 py-3 outline-none ${programIsOpenEnded ? 'border-stone-200 bg-stone-100 text-stone-400' : 'border-stone-300 bg-stone-50 focus:border-[#2f5d50]'}`} />
             </label>
             <label className="space-y-2 text-sm">
               <span className="font-medium text-stone-700">Frecuencia</span>
@@ -815,6 +818,15 @@ export default function ProgramasAgricolasPage() {
               </select>
             </label>
           </div>
+
+          <label className="flex items-center gap-3 rounded-2xl border border-stone-200 bg-stone-50 px-4 py-3 text-sm text-stone-700">
+            <input
+              type="checkbox"
+              checked={!programForm.end_date}
+              onChange={(e) => setProgramForm((prev) => ({ ...prev, end_date: e.target.checked ? '' : (prev.start_date || today) }))}
+            />
+            Programa indefinido en el tiempo
+          </label>
 
           <label className="space-y-2 text-sm">
             <span className="font-medium text-stone-700">Observaciones</span>

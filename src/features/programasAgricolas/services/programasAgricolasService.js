@@ -31,6 +31,16 @@ function addDays(dateStr, days) {
   return formatDate(date)
 }
 
+function hasDefinedEndDate(program) {
+  return Boolean(program?.end_date)
+}
+
+function getProgramDateLabel(program) {
+  return hasDefinedEndDate(program)
+    ? `${program.start_date} → ${program.end_date}`
+    : `${program.start_date} → Indefinido`
+}
+
 function buildPrimaryProgramUnit(items = [], fallbackUnit = 'lb') {
   const units = [...new Set(items.map((item) => String(item.unit || '').trim()).filter(Boolean))]
   if (units.length === 1) return units[0]
@@ -204,18 +214,19 @@ function buildProgramAlerts(program, today) {
     alerts.push({ level: 'warning', type: 'sin_oc_cercana', message: `${futureWithoutPo.length} entrega(s) próximas aún sin orden de compra.` })
   }
 
-  const totalDays = Math.max(1, Math.ceil((new Date(`${program.end_date}T00:00:00`) - new Date(`${program.start_date}T00:00:00`)) / 86400000) + 1)
-  const elapsedDays = Math.min(totalDays, Math.max(0, Math.ceil((new Date(`${today}T00:00:00`) - new Date(`${program.start_date}T00:00:00`)) / 86400000) + 1))
-  const timeProgressPct = round4((elapsedDays / totalDays) * 100)
+  const hasEndDate = hasDefinedEndDate(program)
+  const totalDays = hasEndDate ? Math.max(1, Math.ceil((new Date(`${program.end_date}T00:00:00`) - new Date(`${program.start_date}T00:00:00`)) / 86400000) + 1) : null
+  const elapsedDays = hasEndDate ? Math.min(totalDays, Math.max(0, Math.ceil((new Date(`${today}T00:00:00`) - new Date(`${program.start_date}T00:00:00`)) / 86400000) + 1)) : null
+  const timeProgressPct = hasEndDate ? round4((elapsedDays / totalDays) * 100) : 0
   const volumeProgressPct = n(program.quantity_committed_total) > 0 ? round4((totalReceived / n(program.quantity_committed_total)) * 100) : 0
 
-  if (timeProgressPct > volumeProgressPct + 15 && ['activo', 'pausado'].includes(program.status)) {
+  if (hasEndDate && timeProgressPct > volumeProgressPct + 15 && ['activo', 'pausado'].includes(program.status)) {
     alerts.push({ level: 'warning', type: 'riesgo_tiempo_volumen', message: `El tiempo avanza ${round2(timeProgressPct)}% y el volumen sólo ${round2(volumeProgressPct)}%.` })
   }
 
-  const daysToEnd = Math.ceil((new Date(`${program.end_date}T00:00:00`) - new Date(`${today}T00:00:00`)) / 86400000)
+  const daysToEnd = hasEndDate ? Math.ceil((new Date(`${program.end_date}T00:00:00`) - new Date(`${today}T00:00:00`)) / 86400000) : null
   const pending = Math.max(0, n(program.quantity_committed_total) - totalReceived)
-  if (daysToEnd <= 14 && pending > 0) {
+  if (hasEndDate && daysToEnd <= 14 && pending > 0) {
     alerts.push({ level: 'warning', type: 'faltante_cierre', message: `Faltan ${round4(pending)} ${program.unit} y el programa vence en ${Math.max(daysToEnd, 0)} día(s).` })
   }
 
@@ -319,9 +330,10 @@ function enrichProgram(program, receptions = []) {
     sobreentregas: deliveries.filter((row) => row.computed_status === 'sobreentrega').length,
   }
 
-  const totalDays = Math.max(1, Math.ceil((new Date(`${program.end_date}T00:00:00`) - new Date(`${program.start_date}T00:00:00`)) / 86400000) + 1)
-  const elapsedDays = Math.min(totalDays, Math.max(0, Math.ceil((new Date(`${today}T00:00:00`) - new Date(`${program.start_date}T00:00:00`)) / 86400000) + 1))
-  const timeProgressPct = round4((elapsedDays / totalDays) * 100)
+  const hasEndDate = hasDefinedEndDate(program)
+  const totalDays = hasEndDate ? Math.max(1, Math.ceil((new Date(`${program.end_date}T00:00:00`) - new Date(`${program.start_date}T00:00:00`)) / 86400000) + 1) : null
+  const elapsedDays = hasEndDate ? Math.min(totalDays, Math.max(0, Math.ceil((new Date(`${today}T00:00:00`) - new Date(`${program.start_date}T00:00:00`)) / 86400000) + 1)) : null
+  const timeProgressPct = hasEndDate ? round4((elapsedDays / totalDays) * 100) : 0
   const volumeProgressPct = committedTotal > 0 ? round4((deliveredTotal / committedTotal) * 100) : 0
 
   return {
@@ -338,6 +350,8 @@ function enrichProgram(program, receptions = []) {
     ordered_total: orderedTotal,
     pending_total: pendingTotal,
     compliance_pct: compliancePct,
+    date_label: getProgramDateLabel(program),
+    is_open_ended: !hasEndDate,
     delivery_stats: deliveryStats,
     time_progress_pct: timeProgressPct,
     volume_progress_pct: volumeProgressPct,
@@ -618,7 +632,7 @@ export async function saveProgramaAgricola(programData) {
     quantity_committed_total: totalCommitted,
     unit: primaryItem.unit,
     start_date: programData.start_date,
-    end_date: programData.end_date,
+    end_date: programData.end_date || null,
     delivery_frequency: programData.delivery_frequency || 'semanal',
     status: programData.status || 'borrador',
     notes: String(programData.notes || '').trim() || null,
@@ -627,7 +641,7 @@ export async function saveProgramaAgricola(programData) {
 
   if (!payload.supplier_id) throw new Error('Proveedor requerido')
   if (!payload.program_code) throw new Error('No se pudo generar el código del programa')
-  if (!payload.start_date || !payload.end_date) throw new Error('Fechas requeridas')
+  if (!payload.start_date) throw new Error('Fecha de inicio requerida')
   if (n(payload.quantity_committed_total) <= 0) throw new Error('La cantidad comprometida debe ser mayor a 0')
 
   let programId = programData.id
