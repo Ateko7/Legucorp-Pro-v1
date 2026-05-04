@@ -71,7 +71,7 @@ export default function ProgramasPage({ programs = [], selectedSupplierId = '', 
                 <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
                   <div>
                     <div className="text-xs font-semibold uppercase tracking-[0.18em] text-stone-400">{program.program_code}</div>
-                    <h3 className="mt-2 text-lg font-semibold text-stone-900">{program.materials?.common_name || 'Materia prima'}</h3>
+                    <h3 className="mt-2 text-lg font-semibold text-stone-900">{program.material_labels || program.materials?.common_name || 'Materia prima'}</h3>
                     <div className="mt-1 text-sm text-stone-500">
                       {program.start_date} → {program.end_date} · {program.delivery_frequency}
                     </div>
