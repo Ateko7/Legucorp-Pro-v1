@@ -35,6 +35,7 @@ import CxPPage from './features/finanzas/pages/CxPPage'
 import GastosPage from './features/finanzas/pages/GastosPage'
 import CajaPage from './features/finanzas/pages/CajaPage'
 import FlujoCajaPage from './features/finanzas/pages/FlujoCajaPage'
+import FinancieroDashboard from './features/finanzas/pages/FinancieroDashboard'
 import CotizacionesPage from './features/cotizaciones/pages/CotizacionesPage'
 import VendedoresPage from './features/vendedores/pages/VendedoresPage'
 import CommercialDashboardPage from './features/comercial/pages/CommercialDashboardPage'
@@ -100,6 +101,7 @@ export default function App() {
         <Route path="/contabilidad" element={wrap(<ContabilidadPage />)} />
         <Route path="/facturas-fel" element={wrap(<FacturasFelPage />)} />
         <Route path="/fel-intercompany" element={wrap(<FelIntercompanyPage />)} />
+        <Route path="/financiero" element={wrap(<FinancieroDashboard />)} />
         <Route path="/cxc" element={wrap(<CxCPage />)} />
         <Route path="/cxp" element={wrap(<CxPPage />)} />
         <Route path="/caja" element={wrap(<CajaPage />)} />

@@ -136,6 +136,7 @@ const sections = [
     key: 'finanzas',
     icon: icons.finanzas,
     items: [
+      { label: 'Dashboard financiero', path: '/financiero', moduleKey: 'cxc' },
       { label: 'Cierres operativos', path: '/cierres', moduleKey: 'cierres' },
       { label: 'Contabilidad', path: '/contabilidad', moduleKey: 'contabilidad' },
       { label: 'Facturas FEL', path: '/facturas-fel', moduleKey: 'facturas_fel' },
