@@ -487,7 +487,7 @@ async function hydrateInspecciones(inspecciones = [], orgId) {
           .select(`
             *,
             materials(id, code, common_name),
-            material_process_runs(id, process_date, source_internal_lot)
+            material_process_runs!process_run_id(id, process_date, source_internal_lot)
           `)
           .in('id', outputIds)
       : Promise.resolve({ data: [], error: null }),
@@ -963,7 +963,7 @@ export async function getInspectionSources() {
       .select(`
         *,
         materials(id, code, common_name),
-        material_process_runs(id, process_date, source_internal_lot)
+        material_process_runs!process_run_id(id, process_date, source_internal_lot)
       `)
       .eq('organization_id', orgId)
       .order('created_at', { ascending: false })
